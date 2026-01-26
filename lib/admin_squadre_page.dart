@@ -41,15 +41,15 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
 
   // Funzione Apri Modulo (AGGIORNATA CON CAMPO DIRIGENTE)
   void _apriModulo({String? idDoc, Map<String, dynamic>? dati}) {
-    // Controller esistenti
     final nomeCtrl = TextEditingController(text: dati?['nome']);
     final allenatoreCtrl = TextEditingController(text: dati?['allenatore']);
+    final dirigenteCtrl = TextEditingController(text: dati?['dirigente']);
     final staffCtrl = TextEditingController(text: dati?['staff']);
     final atleteCtrl = TextEditingController(text: dati?['atlete']);
     final allenamentiCtrl = TextEditingController(text: dati?['allenamenti']);
 
-    // NUOVO CONTROLLER PER IL DIRIGENTE
-    final dirigenteCtrl = TextEditingController(text: dati?['dirigente']);
+    // 1. NUOVO CONTROLLER PER IL LINK
+    final linkCtrl = TextEditingController(text: dati?['link_campionato']);
 
     showModalBottomSheet(
       context: context,
@@ -78,12 +78,28 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
               TextField(
                 controller: nomeCtrl,
                 decoration: const InputDecoration(
-                  labelText: "Nome Squadra (es. Under 18)",
+                  labelText: "Nome Squadra",
                   border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 10),
 
+              // 2. NUOVO CAMPO DI TESTO PER IL LINK
+              TextField(
+                controller: linkCtrl,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  labelText: "Link Campionato (Fipav/Sito)",
+                  hintText: "Incolla qui il link http://...",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.link),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // ... resto dei campi ...
+
+              // ------------------------------------
               TextField(
                 controller: allenatoreCtrl,
                 decoration: const InputDecoration(
@@ -92,44 +108,36 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
                 ),
               ),
               const SizedBox(height: 10),
-
-              // --- NUOVO CAMPO DIRIGENTE ---
               TextField(
                 controller: dirigenteCtrl,
                 decoration: const InputDecoration(
-                  labelText: "Dirigente Accompagnatore",
+                  labelText: "Dirigente",
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person_outline),
                 ),
               ),
               const SizedBox(height: 10),
-
-              // -----------------------------
               TextField(
                 controller: staffCtrl,
                 decoration: const InputDecoration(
-                  labelText: "Altro Staff (Vice, etc...)",
+                  labelText: "Staff",
                   border: OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 10),
-
               TextField(
                 controller: allenamentiCtrl,
-                maxLines: 3,
+                maxLines: 2,
                 decoration: const InputDecoration(
                   labelText: "Orari Allenamenti",
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.calendar_month),
                 ),
               ),
               const SizedBox(height: 10),
-
               TextField(
                 controller: atleteCtrl,
-                maxLines: 4,
+                maxLines: 3,
                 decoration: const InputDecoration(
-                  labelText: "Elenco Atlete (separate da virgola)",
+                  labelText: "Atlete",
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -149,6 +157,7 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
 
                       final dataMap = {
                         'nome': nomeCtrl.text,
+                        'link_campionato': linkCtrl.text, // 3. SALVIAMO IL LINK
                         'allenatore': allenatoreCtrl.text,
                         'dirigente': dirigenteCtrl.text,
                         'staff': staffCtrl.text,
@@ -157,13 +166,8 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
                         'ordine': 99,
                       };
 
-                      // --- 1. IL TRUCCO SALVA-VITA ---
-                      // Catturiamo il "Navigator" ORA, prima di iniziare a salvare.
-                      // È come stampare il biglietto di uscita prima che il server risponda.
                       final navigator = Navigator.of(ctx);
-                      // ------------------------------
 
-                      // 2. Operazione lenta (Firebase)
                       if (idDoc == null) {
                         await FirebaseFirestore.instance
                             .collection('squadre')
@@ -174,8 +178,6 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
                             .doc(idDoc)
                             .update(dataMap);
                       }
-
-                      // 3. Usiamo il navigatore che abbiamo "congelato" al punto 1
                       navigator.pop();
                     },
                     style: ElevatedButton.styleFrom(

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart'; // FONDAMENTALE
+import 'campionato_webview_page.dart';
 
 class SquadrePage extends StatelessWidget {
   const SquadrePage({super.key});
@@ -20,14 +22,9 @@ class SquadrePage extends StatelessWidget {
         builder: (context, snapshot) {
           if (!snapshot.hasData)
             return const Center(child: CircularProgressIndicator());
-
           final docs = snapshot.data!.docs;
-
-          if (docs.isEmpty) {
-            return const Center(
-              child: Text("Nessuna squadra inserita al momento."),
-            );
-          }
+          if (docs.isEmpty)
+            return const Center(child: Text("Nessuna squadra inserita."));
 
           return ListView.builder(
             padding: const EdgeInsets.all(16.0),
@@ -36,9 +33,10 @@ class SquadrePage extends StatelessWidget {
               final data = docs[index].data();
               return SchedaSquadra(
                 nomeSquadra: data['nome'] ?? 'Squadra',
+                // Leggiamo il link (se non c'è mettiamo stringa vuota)
+                linkCampionato: data['link_campionato'] ?? '',
                 allenatore: data['allenatore'] ?? '---',
-                dirigente:
-                    data['dirigente'] ?? '', // RECUPERIAMO IL NUOVO CAMPO
+                dirigente: data['dirigente'] ?? '',
                 staff: data['staff'] ?? '',
                 elencoAtlete: data['atlete'] ?? '',
                 allenamenti: data['allenamenti'] ?? '',
@@ -51,11 +49,11 @@ class SquadrePage extends StatelessWidget {
   }
 }
 
-// --- WIDGET SCHEDA SQUADRA (AGGIORNATO CON DIRIGENTE) ---
 class SchedaSquadra extends StatelessWidget {
   final String nomeSquadra;
+  final String linkCampionato; // Variabile nuova
   final String allenatore;
-  final String dirigente; // Variabile nuova
+  final String dirigente;
   final String staff;
   final String elencoAtlete;
   final String allenamenti;
@@ -63,17 +61,28 @@ class SchedaSquadra extends StatelessWidget {
   const SchedaSquadra({
     super.key,
     required this.nomeSquadra,
+    required this.linkCampionato, // Richiesta
     required this.allenatore,
-    required this.dirigente, // Richiesta nel costruttore
+    required this.dirigente,
     required this.staff,
     required this.elencoAtlete,
     required this.allenamenti,
   });
 
+  // Funzione per aprire il link
+  Future<void> _apriLink() async {
+    if (linkCampionato.isEmpty) return;
+    final Uri url = Uri.parse(linkCampionato);
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      debugPrint('Impossibile aprire il link');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      elevation: 4,
+      margin: const EdgeInsets.only(bottom: 15),
       child: ExpansionTile(
         leading: const Icon(
           Icons.sports_volleyball,
@@ -83,7 +92,6 @@ class SchedaSquadra extends StatelessWidget {
           nomeSquadra,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        // Mostriamo l'allenatore subito visibile
         subtitle: Text('All: $allenatore'),
         children: [
           Container(
@@ -92,31 +100,59 @@ class SchedaSquadra extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // SEZIONE TECNICA (Mostriamo Dirigente qui)
+                // --- BOTTONE CLASSIFICA E RISULTATI ---
+                if (linkCampionato.isNotEmpty) ...[
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.table_chart, color: Colors.blue),
+                      label: const Text(
+                        "Vedi Classifica e Risultati",
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.blue, width: 2),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      onPressed: () {
+                        // Navighiamo alla pagina che "pulisce" il sito
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => CampionatoWebviewPage(
+                              url: linkCampionato,
+                              nomeSquadra: nomeSquadra,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                ],
+                // ---------------------------------------
+
+                // -------------------------------------
                 if (dirigente.isNotEmpty) ...[
                   Text(
                     "Dirigente: $dirigente",
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black87,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
-                  const SizedBox(height: 5), // Un po' di spazio
+                  const SizedBox(height: 5),
                 ],
 
-                // SEZIONE STAFF (Se c'è altro staff)
                 if (staff.isNotEmpty) ...[
                   Text(
                     "Staff: $staff",
                     style: const TextStyle(color: Colors.grey),
                   ),
                   const Divider(),
-                ] else ...[
-                  const Divider(), // Se non c'è staff mettiamo comunque la linea
-                ],
+                ] else
+                  const Divider(),
 
-                // SEZIONE ALLENAMENTI
                 if (allenamenti.isNotEmpty) ...[
                   Row(
                     children: const [
@@ -139,7 +175,6 @@ class SchedaSquadra extends StatelessWidget {
                   const Divider(),
                 ],
 
-                // SEZIONE ATLETE
                 const Text(
                   "ROSTER:",
                   style: TextStyle(
