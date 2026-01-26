@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Importante per il database
 
 class DirettivoPage extends StatelessWidget {
   const DirettivoPage({super.key});
@@ -11,58 +12,73 @@ class DirettivoPage extends StatelessWidget {
         backgroundColor: const Color.fromARGB(255, 64, 116, 188),
         foregroundColor: Colors.white,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: const [
-          // Titolo
-          Text(
-            'Organigramma Societario',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Color.fromARGB(255, 64, 116, 188),
-            ),
-          ),
-          SizedBox(height: 20),
+      // Qui inizia la magia: StreamBuilder ascolta il database
+      body: StreamBuilder(
+        // Chiediamo la collezione 'direttivo' ordinata per il campo 'ordine'
+        stream: FirebaseFirestore.instance
+            .collection('direttivo')
+            .orderBy('ordine')
+            .snapshots(),
 
-          // --- MEMBRI DEL DIRETTIVO ---
-          // Usiamo il nostro "timbro" personalizzato (vedi sotto)
-          SchedaMembro(
-            nome: "Mario Rossi",
-            ruolo: "Presidente",
-            icona: Icons.person,
-          ),
+        builder: (context, AsyncSnapshot<QuerySnapshot> snapshot) {
+          // 1. Se sta caricando o ci sono errori
+          if (snapshot.hasError) {
+            return const Center(child: Text('Qualcosa è andato storto'));
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            ); // Rotellina che gira
+          }
 
-          SchedaMembro(
-            nome: "Luigi Verdi",
-            ruolo: "Vice Presidente",
-            icona: Icons.person_outline,
-          ),
+          // 2. Se i dati sono arrivati ma la lista è vuota
+          if (snapshot.data!.docs.isEmpty) {
+            return const Center(
+              child: Text('Nessun membro del direttivo trovato'),
+            );
+          }
 
-          SchedaMembro(
-            nome: "Anna Bianchi",
-            ruolo: "Segretaria",
-            icona: Icons.edit_note,
-          ),
+          // 3. SE ABBIAMO I DATI: Costruiamo la lista
+          final documenti = snapshot.data!.docs;
 
-          SchedaMembro(
-            nome: "Paolo Neri",
-            ruolo: "Direttore Sportivo",
-            icona: Icons.sports,
-          ),
+          return ListView.builder(
+            padding: const EdgeInsets.all(16.0),
+            itemCount: documenti.length,
+            itemBuilder: (context, index) {
+              // Prendiamo i dati del singolo documento
+              var data = documenti[index].data() as Map<String, dynamic>;
 
-          SchedaMembro(
-            nome: "Giovanna Gialli",
-            ruolo: "Responsabile Marketing",
-            icona: Icons.campaign,
-          ),
-        ],
+              // Recuperiamo i campi (usiamo dei valori di default se mancano)
+              String nome = data['nome'] ?? 'Sconosciuto';
+              String ruolo = data['ruolo'] ?? 'Membro';
+
+              return SchedaMembro(
+                nome: nome,
+                ruolo: ruolo,
+                icona: _scegliIcona(ruolo), // Funzione intelligente per l'icona
+              );
+            },
+          );
+        },
       ),
     );
   }
+
+  // Funzione che sceglie l'icona in base al ruolo scritto nel database
+  IconData _scegliIcona(String ruolo) {
+    ruolo = ruolo
+        .toLowerCase(); // Trasformiamo tutto in minuscolo per facilitare il controllo
+    if (ruolo.contains('presidente')) return Icons.person;
+    if (ruolo.contains('vice')) return Icons.person_outline;
+    if (ruolo.contains('segretaria') || ruolo.contains('segretario'))
+      return Icons.edit_note;
+    if (ruolo.contains('sportivo')) return Icons.sports_volleyball;
+    if (ruolo.contains('marketing')) return Icons.campaign;
+    return Icons.account_circle; // Icona generica per tutti gli altri
+  }
 }
 
-// --- WIDGET PERSONALIZZATO PER I MEMBRI ---
+// --- WIDGET SCHEDA MEMBRO (Uguale a prima) ---
 class SchedaMembro extends StatelessWidget {
   final String nome;
   final String ruolo;
@@ -78,11 +94,10 @@ class SchedaMembro extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 3, // Dà un leggero effetto ombra 3D
+      elevation: 3,
       margin: const EdgeInsets.only(bottom: 15),
       child: ListTile(
         leading: CircleAvatar(
-          // Cerchio colorato attorno all'icona
           backgroundColor: const Color.fromARGB(255, 64, 116, 188),
           child: Icon(icona, color: Colors.white),
         ),

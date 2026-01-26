@@ -22,7 +22,7 @@ class HomePage extends StatelessWidget {
             const SizedBox(height: 20),
 
             const Text(
-              'Volley Club App',
+              'Cadoneghe Volley',
               style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
 
