@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'direttivo_page.dart';
 import 'squadre_page.dart'; // Importiamo la pagina delle squadre
 import 'admin_direttivo_page.dart';
+import 'admin_squadre_page.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -80,39 +81,102 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  // --- FUNZIONE PER LA PASSWORD ---
+  // --- FUNZIONE PER LA PASSWORD (CORRETTA) ---
   void _mostraLogin(BuildContext context) {
     TextEditingController passwordController = TextEditingController();
 
     showDialog(
-      context: context,
-      builder: (context) {
+      context: context, // Usa il context della Home Page (VIVO)
+      // QUI C'ERA L'ERRORE: Invece di (context), lo chiamiamo (dialogContext)
+      // così non si confonde con quello sopra!
+      builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Area Riservata'),
           content: TextField(
             controller: passwordController,
-            obscureText: true, // Nasconde il testo (puntini)
+            obscureText: true,
             decoration: const InputDecoration(hintText: "Inserisci Password"),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context), // Chiude
+              onPressed: () => Navigator.pop(
+                dialogContext,
+              ), // Chiudiamo usando il dialogContext
               child: const Text('Annulla'),
             ),
             ElevatedButton(
               onPressed: () {
-                // CONTROLLO PASSWORD (Semplice per ora)
                 if (passwordController.text == "volley2024") {
-                  Navigator.pop(context); // Chiude il popup
-                  // Va alla pagina di inserimento
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const AdminDirettivoPage(),
-                    ),
+                  // 1. Chiudiamo il popup della password
+                  Navigator.pop(dialogContext);
+
+                  // 2. APRIAMO IL MENU
+                  // IMPORTANTE: Qui usiamo 'context' (quello della Home Page, che è ancora vivo),
+                  // non 'dialogContext' (che è appena stato chiuso/distrutto).
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (sheetContext) {
+                      // Anche qui diamo un nome diverso per sicurezza
+                      return Container(
+                        padding: const EdgeInsets.all(20),
+                        width: double.infinity,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              "Pannello Admin",
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+
+                            // GESTISCI DIRETTIVO
+                            ListTile(
+                              leading: const Icon(
+                                Icons.people,
+                                color: Colors.blue,
+                              ),
+                              title: const Text("Gestisci Direttivo"),
+                              onTap: () {
+                                Navigator.pop(sheetContext); // Chiude il menu
+                                // Usa 'context' della Home per navigare
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) => const AdminDirettivoPage(),
+                                  ),
+                                );
+                              },
+                            ),
+
+                            // GESTISCI SQUADRE
+                            ListTile(
+                              leading: const Icon(
+                                Icons.sports_volleyball,
+                                color: Colors.orange,
+                              ),
+                              title: const Text("Gestisci Squadre"),
+                              onTap: () {
+                                Navigator.pop(sheetContext); // Chiude il menu
+                                // Usa 'context' della Home per navigare
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) => const AdminSquadrePage(),
+                                  ),
+                                );
+                              },
+                            ),
+
+                            const SizedBox(height: 20),
+                          ],
+                        ),
+                      );
+                    },
                   );
                 } else {
-                  // Password sbagliata
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Password Errata!'),
