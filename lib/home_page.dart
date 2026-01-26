@@ -5,6 +5,7 @@ import 'admin_direttivo_page.dart';
 import 'admin_squadre_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart'; // Serve per cercare i compleanni
 import 'admin_compleanni_page.dart'; // La pagina appena creata
+import 'sito_risultati_last_gare.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -163,6 +164,72 @@ class _HomePageState extends State<HomePage> {
                   );
                 },
                 child: const Text('Le Nostre Squadre'),
+              ),
+            ),
+            const SizedBox(height: 15),
+
+            // BOTTONE 3: SITO WEB
+            SizedBox(
+              width: 250,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color.fromARGB(
+                    255,
+                    240,
+                    240,
+                    240,
+                  ), // Colore leggermente diverso
+                  foregroundColor: Colors.black,
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SitoWebPage(),
+                    ),
+                  );
+                },
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.public, size: 20), // Icona Mondo
+                    SizedBox(width: 10),
+                    Text('Prossime Gare'),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 15),
+
+            // BOTTONE 3: Risultati Ultime Gare
+            SizedBox(
+              width: 250,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color.fromARGB(
+                    255,
+                    240,
+                    240,
+                    240,
+                  ), // Colore leggermente diverso
+                  foregroundColor: Colors.black,
+                ),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SitoWebPage(),
+                    ),
+                  );
+                },
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.public, size: 20), // Icona Mondo
+                    SizedBox(width: 10),
+                    Text('Risultati Ultime Gare'),
+                  ],
+                ),
               ),
             ),
           ],
