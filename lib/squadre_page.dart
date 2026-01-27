@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:url_launcher/url_launcher.dart'; // FONDAMENTALE
-import 'campionato_webview_page.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'visualizzatore_risultati.dart';
+import 'visualizzatore_classifica.dart';
+// Rimuovi: import 'visualizzatore_campionato.dart';
 
 class SquadrePage extends StatelessWidget {
   const SquadrePage({super.key});
@@ -33,8 +35,12 @@ class SquadrePage extends StatelessWidget {
               final data = docs[index].data();
               return SchedaSquadra(
                 nomeSquadra: data['nome'] ?? 'Squadra',
-                // Leggiamo il link (se non c'è mettiamo stringa vuota)
-                linkCampionato: data['link_campionato'] ?? '',
+
+                // --- MODIFICA: LEGGIAMO I DUE LINK SEPARATI ---
+                linkRisultati: data['link_risultati'] ?? '',
+                linkClassifica: data['link_classifica'] ?? '',
+
+                // ----------------------------------------------
                 allenatore: data['allenatore'] ?? '---',
                 dirigente: data['dirigente'] ?? '',
                 staff: data['staff'] ?? '',
@@ -51,7 +57,8 @@ class SquadrePage extends StatelessWidget {
 
 class SchedaSquadra extends StatelessWidget {
   final String nomeSquadra;
-  final String linkCampionato; // Variabile nuova
+  final String linkRisultati; // <--- Variabile specifica
+  final String linkClassifica; // <--- Variabile specifica
   final String allenatore;
   final String dirigente;
   final String staff;
@@ -61,22 +68,14 @@ class SchedaSquadra extends StatelessWidget {
   const SchedaSquadra({
     super.key,
     required this.nomeSquadra,
-    required this.linkCampionato, // Richiesta
+    required this.linkRisultati, // <--- Richiesto
+    required this.linkClassifica, // <--- Richiesto
     required this.allenatore,
     required this.dirigente,
     required this.staff,
     required this.elencoAtlete,
     required this.allenamenti,
   });
-
-  // Funzione per aprire il link
-  Future<void> _apriLink() async {
-    if (linkCampionato.isEmpty) return;
-    final Uri url = Uri.parse(linkCampionato);
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      debugPrint('Impossibile aprire il link');
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,42 +99,74 @@ class SchedaSquadra extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- BOTTONE CLASSIFICA E RISULTATI ---
-                if (linkCampionato.isNotEmpty) ...[
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.table_chart, color: Colors.blue),
-                      label: const Text(
-                        "Vedi Classifica e Risultati",
-                        style: TextStyle(
-                          color: Colors.blue,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Colors.blue, width: 2),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onPressed: () {
-                        // Navighiamo alla pagina che "pulisce" il sito
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => CampionatoWebviewPage(
-                              url: linkCampionato,
-                              nomeSquadra: nomeSquadra,
+                // --- BLOCCO BOTTONI INTELLIGENTI ---
+                // Mostriamo la riga solo se almeno un link esiste
+                if (linkRisultati.isNotEmpty || linkClassifica.isNotEmpty) ...[
+                  Row(
+                    children: [
+                      // 1. BOTTONE RISULTATI (Solo se c'è il link)
+                      // BOTTONE 1: RISULTATI
+                      if (linkRisultati.isNotEmpty)
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.sports_score, size: 18),
+                            label: const Text("Risultati"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange.shade600,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  // CHIAMA IL VISUALIZZATORE RISULTATI
+                                  builder: (context) =>
+                                      VisualizzatoreRisultatiPage(
+                                        titoloPagina: "Risultati $nomeSquadra",
+                                        urlSito: linkRisultati,
+                                      ),
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
+                        ),
+
+                      if (linkRisultati.isNotEmpty && linkClassifica.isNotEmpty)
+                        const SizedBox(width: 10),
+
+                      // BOTTONE 2: CLASSIFICA
+                      if (linkClassifica.isNotEmpty)
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            icon: const Icon(Icons.leaderboard, size: 18),
+                            label: const Text("Classifica"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0055AA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  // CHIAMA IL VISUALIZZATORE CLASSIFICA
+                                  builder: (context) =>
+                                      VisualizzatoreClassificaPage(
+                                        titoloPagina: "Classifica $nomeSquadra",
+                                        urlSito: linkClassifica,
+                                      ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 15),
                 ],
-                // ---------------------------------------
 
-                // -------------------------------------
+                // ---------------------------------------
                 if (dirigente.isNotEmpty) ...[
                   Text(
                     "Dirigente: $dirigente",

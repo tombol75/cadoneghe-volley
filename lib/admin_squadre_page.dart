@@ -39,7 +39,7 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
     );
   }
 
-  // Funzione Apri Modulo (AGGIORNATA CON CAMPO DIRIGENTE)
+  // Funzione Apri Modulo
   void _apriModulo({String? idDoc, Map<String, dynamic>? dati}) {
     final nomeCtrl = TextEditingController(text: dati?['nome']);
     final allenatoreCtrl = TextEditingController(text: dati?['allenatore']);
@@ -48,8 +48,13 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
     final atleteCtrl = TextEditingController(text: dati?['atlete']);
     final allenamentiCtrl = TextEditingController(text: dati?['allenamenti']);
 
-    // 1. NUOVO CONTROLLER PER IL LINK
-    final linkCtrl = TextEditingController(text: dati?['link_campionato']);
+    // --- DUE CONTROLLER SEPARATI PER I LINK ---
+    final linkRisultatiCtrl = TextEditingController(
+      text: dati?['link_risultati'],
+    );
+    final linkClassificaCtrl = TextEditingController(
+      text: dati?['link_classifica'],
+    );
 
     showModalBottomSheet(
       context: context,
@@ -84,22 +89,32 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
               ),
               const SizedBox(height: 10),
 
-              // 2. NUOVO CAMPO DI TESTO PER IL LINK
+              // --- CAMPO LINK RISULTATI ---
               TextField(
-                controller: linkCtrl,
+                controller: linkRisultatiCtrl,
                 keyboardType: TextInputType.url,
                 decoration: const InputDecoration(
-                  labelText: "Link Campionato (Fipav/Sito)",
-                  hintText: "Incolla qui il link http://...",
+                  labelText: "Link Solo Risultati (Opzionale)",
+                  hintText: "http://...",
                   border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.link),
+                  prefixIcon: Icon(Icons.sports_score, color: Colors.orange),
                 ),
               ),
               const SizedBox(height: 10),
 
-              // ... resto dei campi ...
+              // --- CAMPO LINK CLASSIFICA ---
+              TextField(
+                controller: linkClassificaCtrl,
+                keyboardType: TextInputType.url,
+                decoration: const InputDecoration(
+                  labelText: "Link Solo Classifica (Opzionale)",
+                  hintText: "http://...",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.leaderboard, color: Colors.blue),
+                ),
+              ),
+              const SizedBox(height: 10),
 
-              // ------------------------------------
               TextField(
                 controller: allenatoreCtrl,
                 decoration: const InputDecoration(
@@ -157,7 +172,10 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
 
                       final dataMap = {
                         'nome': nomeCtrl.text,
-                        'link_campionato': linkCtrl.text, // 3. SALVIAMO IL LINK
+                        'link_risultati':
+                            linkRisultatiCtrl.text, // Salvataggio Link 1
+                        'link_classifica':
+                            linkClassificaCtrl.text, // Salvataggio Link 2
                         'allenatore': allenatoreCtrl.text,
                         'dirigente': dirigenteCtrl.text,
                         'staff': staffCtrl.text,
@@ -165,8 +183,6 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
                         'allenamenti': allenamentiCtrl.text,
                         'ordine': 99,
                       };
-
-                      final navigator = Navigator.of(ctx);
 
                       if (idDoc == null) {
                         await FirebaseFirestore.instance
@@ -178,7 +194,7 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
                             .doc(idDoc)
                             .update(dataMap);
                       }
-                      navigator.pop();
+                      Navigator.pop(ctx);
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color.fromARGB(255, 64, 116, 188),
