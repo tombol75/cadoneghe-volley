@@ -9,15 +9,110 @@ class AdminSquadrePage extends StatefulWidget {
 }
 
 class _AdminSquadrePageState extends State<AdminSquadrePage> {
-  // Funzione Elimina
+  // Variabile locale per mostrare il numero a video
+  String _numeroAttuale = "Caricamento...";
+
+  @override
+  void initState() {
+    super.initState();
+    _leggiNumeroDaFirebase();
+  }
+
+  // Legge il numero da Firebase all'avvio
+  Future<void> _leggiNumeroDaFirebase() async {
+    try {
+      var doc = await FirebaseFirestore.instance
+          .collection('impostazioni')
+          .doc('contatti')
+          .get();
+
+      if (mounted) {
+        setState(() {
+          if (doc.exists &&
+              doc.data() != null &&
+              doc.data()!.containsKey('numero')) {
+            _numeroAttuale = doc.data()!['numero'].toString();
+          } else {
+            _numeroAttuale = "Nessun numero salvato";
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _numeroAttuale = "Errore connessione");
+    }
+  }
+
+  // Apre il popup per modificare il numero
+  void _apriPopupConfigurazione() {
+    final numeroCtrl = TextEditingController();
+
+    // Se c'è già un numero valido, riempiamo il campo
+    if (_numeroAttuale.startsWith("+") || _numeroAttuale.startsWith("3")) {
+      numeroCtrl.text = _numeroAttuale;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Configura Numero SMS"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Inserisci il cellulare della società (es. +39333...):"),
+            const SizedBox(height: 10),
+            TextField(
+              controller: numeroCtrl,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: "Numero Cellulare",
+                hintText: "+393471234567",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.phone),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Annulla"),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              String nuovoNumero = numeroCtrl.text.trim();
+
+              if (nuovoNumero.isEmpty) return;
+
+              // Salvataggio su Firebase (crea la collezione se non esiste)
+              await FirebaseFirestore.instance
+                  .collection('impostazioni')
+                  .doc('contatti')
+                  .set({'numero': nuovoNumero});
+
+              // Aggiorna la scritta a video
+              setState(() {
+                _numeroAttuale = nuovoNumero;
+              });
+
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Numero salvato correttamente!")),
+              );
+            },
+            child: const Text("Salva Numero"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- GESTIONE SQUADRE (Codice Standard) ---
   void _eliminaSquadra(String idDoc) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Eliminare Squadra?"),
-        content: const Text(
-          "Se elimini la squadra, perderai tutti i dati inseriti.",
-        ),
+        content: const Text("Se elimini la squadra, perderai i dati."),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -39,16 +134,13 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
     );
   }
 
-  // Funzione Apri Modulo
-  void _apriModulo({String? idDoc, Map<String, dynamic>? dati}) {
+  void _apriModuloSquadra({String? idDoc, Map<String, dynamic>? dati}) {
     final nomeCtrl = TextEditingController(text: dati?['nome']);
     final allenatoreCtrl = TextEditingController(text: dati?['allenatore']);
     final dirigenteCtrl = TextEditingController(text: dati?['dirigente']);
     final staffCtrl = TextEditingController(text: dati?['staff']);
     final atleteCtrl = TextEditingController(text: dati?['atlete']);
     final allenamentiCtrl = TextEditingController(text: dati?['allenamenti']);
-
-    // --- DUE CONTROLLER SEPARATI PER I LINK ---
     final linkRisultatiCtrl = TextEditingController(
       text: dati?['link_risultati'],
     );
@@ -69,7 +161,6 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 idDoc == null ? "Nuova Squadra" : "Modifica Squadra",
@@ -79,7 +170,6 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
                 ),
               ),
               const SizedBox(height: 15),
-
               TextField(
                 controller: nomeCtrl,
                 decoration: const InputDecoration(
@@ -88,37 +178,28 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
                 ),
               ),
               const SizedBox(height: 10),
-
-              // --- CAMPO LINK RISULTATI ---
               TextField(
                 controller: linkRisultatiCtrl,
-                keyboardType: TextInputType.url,
                 decoration: const InputDecoration(
-                  labelText: "Link Solo Risultati (Opzionale)",
-                  hintText: "http://...",
+                  labelText: "Link Risultati",
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.sports_score, color: Colors.orange),
                 ),
               ),
               const SizedBox(height: 10),
-
-              // --- CAMPO LINK CLASSIFICA ---
               TextField(
                 controller: linkClassificaCtrl,
-                keyboardType: TextInputType.url,
                 decoration: const InputDecoration(
-                  labelText: "Link Solo Classifica (Opzionale)",
-                  hintText: "http://...",
+                  labelText: "Link Classifica",
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.leaderboard, color: Colors.blue),
                 ),
               ),
               const SizedBox(height: 10),
-
               TextField(
                 controller: allenatoreCtrl,
                 decoration: const InputDecoration(
-                  labelText: "1° Allenatore",
+                  labelText: "Allenatore",
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -143,7 +224,7 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
                 controller: allenamentiCtrl,
                 maxLines: 2,
                 decoration: const InputDecoration(
-                  labelText: "Orari Allenamenti",
+                  labelText: "Allenamenti",
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -157,54 +238,39 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text("Annulla"),
-                  ),
-                  const SizedBox(width: 10),
-                  ElevatedButton(
-                    onPressed: () async {
-                      if (nomeCtrl.text.isEmpty) return;
-
-                      final dataMap = {
-                        'nome': nomeCtrl.text,
-                        'link_risultati':
-                            linkRisultatiCtrl.text, // Salvataggio Link 1
-                        'link_classifica':
-                            linkClassificaCtrl.text, // Salvataggio Link 2
-                        'allenatore': allenatoreCtrl.text,
-                        'dirigente': dirigenteCtrl.text,
-                        'staff': staffCtrl.text,
-                        'atlete': atleteCtrl.text,
-                        'allenamenti': allenamentiCtrl.text,
-                        'ordine': 99,
-                      };
-
-                      if (idDoc == null) {
-                        await FirebaseFirestore.instance
-                            .collection('squadre')
-                            .add(dataMap);
-                      } else {
-                        await FirebaseFirestore.instance
-                            .collection('squadre')
-                            .doc(idDoc)
-                            .update(dataMap);
-                      }
-                      Navigator.pop(ctx);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 64, 116, 188),
-                    ),
-                    child: const Text(
-                      "Salva",
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
+              ElevatedButton(
+                onPressed: () async {
+                  if (nomeCtrl.text.isEmpty) return;
+                  final dataMap = {
+                    'nome': nomeCtrl.text,
+                    'link_risultati': linkRisultatiCtrl.text,
+                    'link_classifica': linkClassificaCtrl.text,
+                    'allenatore': allenatoreCtrl.text,
+                    'dirigente': dirigenteCtrl.text,
+                    'staff': staffCtrl.text,
+                    'atlete': atleteCtrl.text,
+                    'allenamenti': allenamentiCtrl.text,
+                    'ordine': 99,
+                  };
+                  if (idDoc == null) {
+                    await FirebaseFirestore.instance
+                        .collection('squadre')
+                        .add(dataMap);
+                  } else {
+                    await FirebaseFirestore.instance
+                        .collection('squadre')
+                        .doc(idDoc)
+                        .update(dataMap);
+                  }
+                  Navigator.pop(ctx);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color.fromARGB(255, 64, 116, 188),
+                ),
+                child: const Text(
+                  "Salva",
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
             ],
           ),
@@ -217,55 +283,122 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gestione Squadre'),
+        title: const Text('Amministrazione'),
         backgroundColor: Colors.grey[900],
         foregroundColor: Colors.white,
+        actions: [
+          // 1. ICONA IN ALTO A DESTRA
+          IconButton(
+            icon: const Icon(Icons.settings_phone),
+            onPressed: _apriPopupConfigurazione,
+            tooltip: "Configura SMS",
+          ),
+        ],
       ),
-      body: StreamBuilder(
-        stream: FirebaseFirestore.instance
-            .collection('squadre')
-            .orderBy('ordine')
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData)
-            return const Center(child: CircularProgressIndicator());
-          final docs = snapshot.data!.docs;
-          if (docs.isEmpty)
-            return const Center(child: Text("Nessuna squadra."));
+      body: Column(
+        children: [
+          // 2. BOX BEN VISIBILE IN CIMA ALLA LISTA
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade100, // Colore Giallo/Ambra per risaltare
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.amber.shade700, width: 2),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.phonelink_setup,
+                  size: 40,
+                  color: Colors.brown,
+                ),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "NUMERO PER SMS:",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _numeroAttuale,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: _apriPopupConfigurazione,
+                  child: const Text("MODIFICA"),
+                ),
+              ],
+            ),
+          ),
 
-          return ListView.separated(
-            itemCount: docs.length,
-            separatorBuilder: (ctx, i) => const Divider(),
-            itemBuilder: (context, index) {
-              final data = docs[index].data();
-              return ListTile(
-                title: Text(
-                  data['nome'] ?? '---',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                subtitle: Text("All: ${data['allenatore']}"),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
-                      onPressed: () =>
-                          _apriModulo(idDoc: docs[index].id, dati: data),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _eliminaSquadra(docs[index].id),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
+          const Divider(),
+
+          // 3. LISTA SQUADRE
+          Expanded(
+            child: StreamBuilder(
+              stream: FirebaseFirestore.instance
+                  .collection('squadre')
+                  .orderBy('ordine')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData)
+                  return const Center(child: CircularProgressIndicator());
+                final docs = snapshot.data!.docs;
+                if (docs.isEmpty)
+                  return const Center(child: Text("Nessuna squadra."));
+
+                return ListView.separated(
+                  itemCount: docs.length,
+                  separatorBuilder: (ctx, i) => const Divider(),
+                  itemBuilder: (context, index) {
+                    final data = docs[index].data();
+                    return ListTile(
+                      title: Text(
+                        data['nome'] ?? '---',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text("All: ${data['allenatore']}"),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            onPressed: () => _apriModuloSquadra(
+                              idDoc: docs[index].id,
+                              dati: data,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => _eliminaSquadra(docs[index].id),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color.fromARGB(255, 64, 116, 188),
-        onPressed: () => _apriModulo(),
+        onPressed: () => _apriModuloSquadra(),
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );

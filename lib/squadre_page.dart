@@ -150,11 +150,13 @@ class SchedaSquadra extends StatelessWidget {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  // CHIAMA IL VISUALIZZATORE CLASSIFICA
+                                  // CHIAMA IL VISUALIZZATORE CLASSIFICA CON IL NOME SQUADRA
                                   builder: (context) =>
                                       VisualizzatoreClassificaPage(
                                         titoloPagina: "Classifica $nomeSquadra",
                                         urlSito: linkClassifica,
+                                        nomeSquadra:
+                                            nomeSquadra, // <--- FONDAMENTALE: Passiamo il nome esatto
                                       ),
                                 ),
                               );

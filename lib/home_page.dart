@@ -9,6 +9,7 @@ import 'sito_risultati_last_gare.dart'; // Assicurati che questo file esista
 import 'pagina_contatti.dart'; // <--- IMPORTANTE: Importiamo la nuova pagina contatti
 import 'tabellone_page.dart';
 import 'visualizzatore_gare.dart';
+import 'contatti_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -265,16 +266,19 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: 15),
 
                 // 3. Contattaci (NUOVO)
+                // ... dentro il build del menu
                 _buildMenuButton(
                   context: context,
-                  titolo: "Contattaci / Segnalazioni",
-                  icona: Icons.mail_outline,
-                  coloreIcona: Colors.green,
+                  titolo:
+                      "Contatti e Segnalazioni", // O come lo hai chiamato tu
+                  icona: Icons.sms_outlined,
+                  coloreIcona: Colors.green, // O il colore che preferisci
                   onTap: () {
+                    // QUESTO È IL CODICE CORRETTO PER APRIRE LA PAGINA
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const PaginaContatti(),
+                        builder: (context) => const ContattiPage(),
                       ),
                     );
                   },
