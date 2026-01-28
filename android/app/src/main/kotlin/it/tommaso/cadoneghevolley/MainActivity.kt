@@ -1,4 +1,4 @@
-package com.example.prima_app
+package it.tommaso.cadoneghevolley
 
 import io.flutter.embedding.android.FlutterActivity
 
