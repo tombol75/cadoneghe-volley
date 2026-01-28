@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // IMPORTANTE
 import 'direttivo_page.dart';
 import 'squadre_page.dart';
 import 'admin_direttivo_page.dart';
 import 'admin_squadre_page.dart';
-//import 'package:cloud_firestore/cloud_firestore.dart';
 import 'admin_compleanni_page.dart';
+import 'admin_comunicazioni_page.dart'; // NUOVA PAGINA ADMIN
+import 'comunicazioni_page.dart'; // NUOVA PAGINA USER
 import 'tabellone_page.dart';
 import 'visualizzatore_gare.dart';
 import 'contatti_page.dart';
-//import 'main.dart'; // Importa per accedere ai CVColors
 import 'sport_colors.dart';
 
 class HomePage extends StatefulWidget {
@@ -19,18 +21,101 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // (Codice initState e _checkCompleanniOggi rimosso per brevità,
-  // puoi rimetterlo se ti serve quella funzionalità)
+  @override
+  void initState() {
+    super.initState();
+    // Controllo se ci sono comunicazioni urgenti all'avvio
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkComunicazioniUrgenti();
+    });
+  }
+
+  // LOGICA POPUP URGENTE
+  Future<void> _checkComunicazioniUrgenti() async {
+    try {
+      // 1. Cerco l'ultima news con priorità 1 (Alta)
+      var query = await FirebaseFirestore.instance
+          .collection('comunicazioni')
+          .where('priorita', isEqualTo: 1)
+          .orderBy('data', descending: true)
+          .limit(1)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        var doc = query.docs.first;
+        String idNews = doc.id;
+        String titolo = doc['titolo'];
+        String testo = doc['testo'];
+
+        // 2. Controllo nella memoria locale se l'ho già letta
+        final prefs = await SharedPreferences.getInstance();
+        String? idUltimaLetta = prefs.getString('ultima_news_urgente_letta');
+
+        // 3. Se l'ID è diverso (quindi è una news nuova), mostro il popup
+        if (idUltimaLetta != idNews) {
+          if (mounted) {
+            showDialog(
+              context: context,
+              barrierDismissible: false, // L'utente DEVE premere OK
+              builder: (ctx) => AlertDialog(
+                backgroundColor: Colors.red.shade50,
+                title: Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red,
+                      size: 30,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        titolo,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                content: Text(testo, style: const TextStyle(fontSize: 16)),
+                actions: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                    ),
+                    onPressed: () async {
+                      // 4. Salvo che l'ho letta
+                      await prefs.setString(
+                        'ultima_news_urgente_letta',
+                        idNews,
+                      );
+                      if (mounted) Navigator.pop(ctx);
+                    },
+                    child: const Text(
+                      "Ho capito",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Errore check news: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Usiamo una CustomScrollView per effetti di scorrimento avanzati
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // --- 1. HEADER APPBAR CURVO CON GRADIENTE E LOGO ---
+          // HEADER
           SliverAppBar(
-            expandedHeight: 280.0,
+            expandedHeight: 260.0,
             floating: false,
             pinned: true,
             stretch: true,
@@ -50,7 +135,6 @@ class _HomePageState extends State<HomePage> {
                     end: Alignment.bottomRight,
                     colors: [SportColors.blueLight, SportColors.blueDeep],
                   ),
-                  // Aggiunge un taglio curvo in fondo all'header
                   borderRadius: BorderRadius.only(
                     bottomLeft: Radius.circular(40),
                     bottomRight: Radius.circular(40),
@@ -58,27 +142,49 @@ class _HomePageState extends State<HomePage> {
                 ),
                 child: Center(
                   child: Padding(
-                    padding: const EdgeInsets.only(top: 60.0),
-                    // LOGO: Assicurati che il file esista in assets/logo_round.png o assets/images/...
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 20,
-                            offset: Offset(0, 10),
+                    padding: const EdgeInsets.only(top: 50.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 120,
+                          height: 120,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 20,
+                                offset: Offset(0, 10),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      // Se hai rinominato il file come detto prima, usa quello corretto
-                      child: const CircleAvatar(
-                        radius: 65,
-                        backgroundColor: Colors.white,
-                        backgroundImage: AssetImage(
-                          'assets/images/logo_round.png',
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/images/logo_round.png',
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(
+                                  Icons.sports_volleyball,
+                                  size: 60,
+                                  color: SportColors.blueDeep,
+                                );
+                              },
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 15),
+                        const Text(
+                          "CADONEGHE VOLLEY",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 22,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -101,7 +207,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          // --- 2. CORPO DELLA PAGINA ---
+          // CORPO
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20.0),
@@ -115,7 +221,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // --- GRIGLIA AZIONI RAPIDE (Gare, Risultati, Segnapunti) ---
                   GridView.count(
                     crossAxisCount: 2,
                     shrinkWrap: true,
@@ -140,6 +245,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
+
                       _buildActionCard(
                         context,
                         title: "Ultimi Risultati",
@@ -156,6 +262,7 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
+
                       _buildActionCard(
                         context,
                         title: "Segnapunti",
@@ -168,15 +275,17 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
+
+                      // --- NUOVO TASTO COMUNICAZIONI ---
                       _buildActionCard(
                         context,
-                        title: "Contatti SMS",
-                        icon: Icons.sms_rounded,
-                        color: Colors.green,
+                        title: "News & Avvisi",
+                        icon: Icons.campaign_rounded,
+                        color: Colors.purple,
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const ContattiPage(),
+                            builder: (context) => const ComunicazioniPage(),
                           ),
                         ),
                       ),
@@ -190,7 +299,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // --- BANNER SQUADRE E DIRETTIVO ---
                   _buildBigBannerBtn(
                     context,
                     title: "LE NOSTRE SQUADRE",
@@ -207,7 +315,9 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
+
                   const SizedBox(height: 15),
+
                   _buildBigBannerBtn(
                     context,
                     title: "IL DIRETTIVO",
@@ -224,6 +334,23 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 15),
+
+                  _buildBigBannerBtn(
+                    context,
+                    title: "CONTATTACI",
+                    subtitle: "Invia SMS e Segnalazioni",
+                    icon: Icons.sms,
+                    gradientColors: [Colors.green, Colors.teal],
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ContattiPage(),
+                      ),
+                    ),
+                  ),
+
                   const SizedBox(height: 40),
                 ],
               ),
@@ -234,7 +361,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- NUOVO WIDGET: CARD AZIONE RAPIDA (GRIGLIA) ---
   Widget _buildActionCard(
     BuildContext context, {
     required String title,
@@ -279,7 +405,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- CORREZIONE QUI: WIDGET BANNER CON EXPANDED ---
   Widget _buildBigBannerBtn(
     BuildContext context, {
     required String title,
@@ -316,7 +441,6 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Icon(icon, size: 45, color: Colors.white.withOpacity(0.9)),
                 const SizedBox(width: 20),
-                // --- AGGIUNTO EXPANDED QUI ---
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,14 +448,12 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       Text(
                         title,
-                        maxLines: 1, // Limita a 1 riga
-                        overflow: TextOverflow
-                            .ellipsis, // Aggiunge ... se troppo lungo
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w900,
-                          fontSize:
-                              18, // Font leggermente ridotto per sicurezza
+                          fontSize: 18,
                           letterSpacing: 0.5,
                         ),
                       ),
@@ -347,7 +469,6 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                 ),
-                // -----------------------------
                 const SizedBox(width: 10),
                 Icon(
                   Icons.arrow_forward_ios_rounded,
@@ -362,7 +483,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // FUNZIONE LOGIN
   void _mostraLogin(BuildContext context) {
     TextEditingController passwordController = TextEditingController();
 
@@ -402,6 +522,23 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ),
                             const SizedBox(height: 20),
+                            ListTile(
+                              leading: const Icon(
+                                Icons.notifications_active,
+                                color: Colors.purple,
+                              ),
+                              title: const Text("Gestisci Comunicazioni"),
+                              onTap: () {
+                                Navigator.pop(sheetContext);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) =>
+                                        const AdminComunicazioniPage(),
+                                  ),
+                                );
+                              },
+                            ), // <--- NUOVO LINK
                             ListTile(
                               leading: const Icon(
                                 Icons.people,
