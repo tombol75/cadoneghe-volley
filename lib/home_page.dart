@@ -3,12 +3,12 @@ import 'direttivo_page.dart';
 import 'squadre_page.dart';
 import 'admin_direttivo_page.dart';
 import 'admin_squadre_page.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+//import 'package:cloud_firestore/cloud_firestore.dart';
 import 'admin_compleanni_page.dart';
 import 'tabellone_page.dart';
 import 'visualizzatore_gare.dart';
 import 'contatti_page.dart';
-import 'main.dart'; // Importa per accedere ai CVColors
+//import 'main.dart'; // Importa per accedere ai CVColors
 import 'sport_colors.dart';
 
 class HomePage extends StatefulWidget {
