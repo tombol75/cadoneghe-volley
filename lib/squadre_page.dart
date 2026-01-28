@@ -40,10 +40,11 @@ class SquadrePage extends StatelessWidget {
                   .orderBy('ordine')
                   .snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData)
+                if (!snapshot.hasData) {
                   return const Center(
                     child: CircularProgressIndicator(color: Colors.white),
                   );
+                }
                 final docs = snapshot.data!.docs;
 
                 return ListView.builder(
@@ -127,10 +128,7 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
             onTap: () => setState(() => _expanded = !_expanded),
             borderRadius: BorderRadius.circular(20),
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 15,
-                vertical: 20,
-              ), // Margini ridotti
+              padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 20),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [SportColors.blueDeep, SportColors.blueLight],
@@ -148,7 +146,6 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
                     size: 28,
                   ),
                   const SizedBox(width: 12),
-                  // USIAMO EXPANDED PER GESTIRE LO SPAZIO RIMANENTE
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -160,20 +157,19 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
                           ),
-                          maxLines: 2, // Permetti 2 righe
-                          overflow: TextOverflow
-                              .ellipsis, // Se è ancora più lungo, metti "..."
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
+                        // Mostriamo il coach anche qui per riferimento rapido
                         Text(
                           "Coach: ${widget.allenatore}",
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 14,
                           ),
-                          maxLines: 1, // Il coach sta su una riga
-                          overflow: TextOverflow
-                              .ellipsis, // Se troppo lungo, taglia con "..."
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -190,14 +186,14 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
             ),
           ),
 
-          // CONTENUTO NASCOSTO
+          // CONTENUTO NASCOSTO (DETTAGLI)
           if (_expanded)
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // BOTTONI AZIONE
+                  // 1. BOTTONI AZIONE
                   if (widget.linkRisultati.isNotEmpty ||
                       widget.linkClassifica.isNotEmpty)
                     Row(
@@ -249,17 +245,35 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
                     ),
 
                   const SizedBox(height: 20),
+
+                  // 2. DETTAGLI STAFF (REINSERITI QUI!)
+                  _infoRow(Icons.person, "1° Allenatore", widget.allenatore),
+
+                  if (widget.dirigente.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _infoRow(Icons.badge, "Dirigente", widget.dirigente),
+                  ],
+
+                  if (widget.staff.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _infoRow(Icons.groups, "Staff Tecnico", widget.staff),
+                  ],
+
+                  const Divider(height: 25), // Linea di separazione
+                  // 3. ALLENAMENTI
                   if (widget.allenamenti.isNotEmpty) ...[
                     _infoRow(
                       Icons.access_time,
                       "Allenamenti",
                       widget.allenamenti,
                     ),
-                    const Divider(height: 20),
+                    const SizedBox(height: 15),
                   ],
+
+                  // 4. ROSTER
                   _infoRow(
                     Icons.group,
-                    "Roster",
+                    "Atlete",
                     widget.elencoAtlete.replaceAll(", ", "\n"),
                   ),
                 ],
@@ -280,14 +294,10 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
         foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 5,
-          vertical: 12,
-        ), // Padding ridotto
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
       onPressed: onTap,
-      // FittedBox riduce il testo se il bottone è troppo stretto
       child: FittedBox(
         fit: BoxFit.scaleDown,
         child: Row(
@@ -317,14 +327,16 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Colors.grey,
+                  fontSize: 13, // Leggermente più piccolo per l'etichetta
                 ),
               ),
-              const SizedBox(height: 5),
+              const SizedBox(height: 2),
               Text(
                 content,
                 style: const TextStyle(
                   fontSize: 15,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
+                  color: SportColors.textDark,
                 ),
               ),
             ],

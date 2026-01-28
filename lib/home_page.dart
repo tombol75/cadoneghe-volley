@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // IMPORTANTE
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'direttivo_page.dart';
 import 'squadre_page.dart';
 import 'admin_direttivo_page.dart';
 import 'admin_squadre_page.dart';
 import 'admin_compleanni_page.dart';
-import 'admin_comunicazioni_page.dart'; // NUOVA PAGINA ADMIN
-import 'comunicazioni_page.dart'; // NUOVA PAGINA USER
+import 'admin_comunicazioni_page.dart';
+import 'admin_documenti_page.dart'; // <--- NUOVO IMPORT ADMIN
+import 'comunicazioni_page.dart';
+import 'documenti_page.dart'; // <--- NUOVO IMPORT USER
 import 'tabellone_page.dart';
 import 'visualizzatore_gare.dart';
 import 'contatti_page.dart';
@@ -24,16 +27,13 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // Controllo se ci sono comunicazioni urgenti all'avvio
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkComunicazioniUrgenti();
     });
   }
 
-  // LOGICA POPUP URGENTE
   Future<void> _checkComunicazioniUrgenti() async {
     try {
-      // 1. Cerco l'ultima news con priorità 1 (Alta)
       var query = await FirebaseFirestore.instance
           .collection('comunicazioni')
           .where('priorita', isEqualTo: 1)
@@ -47,18 +47,19 @@ class _HomePageState extends State<HomePage> {
         String titolo = doc['titolo'];
         String testo = doc['testo'];
 
-        // 2. Controllo nella memoria locale se l'ho già letta
         final prefs = await SharedPreferences.getInstance();
         String? idUltimaLetta = prefs.getString('ultima_news_urgente_letta');
 
-        // 3. Se l'ID è diverso (quindi è una news nuova), mostro il popup
         if (idUltimaLetta != idNews) {
           if (mounted) {
             showDialog(
               context: context,
-              barrierDismissible: false, // L'utente DEVE premere OK
+              barrierDismissible: false,
               builder: (ctx) => AlertDialog(
                 backgroundColor: Colors.red.shade50,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
                 title: Row(
                   children: [
                     const Icon(
@@ -85,16 +86,24 @@ class _HomePageState extends State<HomePage> {
                       backgroundColor: Colors.red,
                     ),
                     onPressed: () async {
-                      // 4. Salvo che l'ho letta
                       await prefs.setString(
                         'ultima_news_urgente_letta',
                         idNews,
                       );
                       if (mounted) Navigator.pop(ctx);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (c) => const ComunicazioniPage(),
+                        ),
+                      );
                     },
                     child: const Text(
-                      "Ho capito",
-                      style: TextStyle(color: Colors.white),
+                      "HO LETTO",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ],
@@ -113,7 +122,6 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // HEADER
           SliverAppBar(
             expandedHeight: 260.0,
             floating: false,
@@ -207,7 +215,6 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          // CORPO
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20.0),
@@ -229,6 +236,19 @@ class _HomePageState extends State<HomePage> {
                     mainAxisSpacing: 15,
                     childAspectRatio: 1.1,
                     children: [
+                      _buildActionCard(
+                        context,
+                        title: "Avvisi & News",
+                        icon: Icons.campaign_rounded,
+                        color: Colors.purple,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ComunicazioniPage(),
+                          ),
+                        ),
+                      ),
+
                       _buildActionCard(
                         context,
                         title: "Prossime Gare",
@@ -276,16 +296,16 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
 
-                      // --- NUOVO TASTO COMUNICAZIONI ---
+                      // --- NUOVO TASTO DOCUMENTI ---
                       _buildActionCard(
                         context,
-                        title: "News & Avvisi",
-                        icon: Icons.campaign_rounded,
-                        color: Colors.purple,
+                        title: "Area Download",
+                        icon: Icons.cloud_download_rounded,
+                        color: Colors.teal,
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const ComunicazioniPage(),
+                            builder: (context) => const DocumentiPage(),
                           ),
                         ),
                       ),
@@ -320,7 +340,7 @@ class _HomePageState extends State<HomePage> {
 
                   _buildBigBannerBtn(
                     context,
-                    title: "IL DIRETTIVO",
+                    title: "STAFF",
                     subtitle: "Chi siamo e organizzazione",
                     icon: Icons.account_balance_rounded,
                     gradientColors: [
@@ -524,7 +544,7 @@ class _HomePageState extends State<HomePage> {
                             const SizedBox(height: 20),
                             ListTile(
                               leading: const Icon(
-                                Icons.notifications_active,
+                                Icons.campaign,
                                 color: Colors.purple,
                               ),
                               title: const Text("Gestisci Comunicazioni"),
@@ -538,7 +558,25 @@ class _HomePageState extends State<HomePage> {
                                   ),
                                 );
                               },
-                            ), // <--- NUOVO LINK
+                            ),
+                            // --- NUOVO LINK ADMIN DOCUMENTI ---
+                            ListTile(
+                              leading: const Icon(
+                                Icons.description,
+                                color: Colors.teal,
+                              ),
+                              title: const Text("Gestisci Documenti"),
+                              onTap: () {
+                                Navigator.pop(sheetContext);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) => const AdminDocumentiPage(),
+                                  ),
+                                );
+                              },
+                            ),
+
                             ListTile(
                               leading: const Icon(
                                 Icons.people,
