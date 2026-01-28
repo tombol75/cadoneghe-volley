@@ -6,9 +6,9 @@
         </intent>
     </queries>
     <application
-        android:label="prima_app"
+        android:label="CadonegheVolley"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@mipmap/launcher_icon"
         android:usesCleartextTraffic="true"> ```
         <activity
             android:name=".MainActivity"

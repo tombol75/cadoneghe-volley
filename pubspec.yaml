@@ -41,6 +41,7 @@ dependencies:
   url_launcher: ^6.3.2
   http: ^1.6.0
   html: ^0.15.6
+  flutter_launcher_icons: ^0.13.1
 
 dev_dependencies:
   flutter_test:
@@ -93,3 +94,10 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/logo_round.png" # <--- IL PERCORSO DEL TUO LOGO
+  min_sdk_android: 21 # opzionale
+  adaptive_icon_background: "#FFFFFF" # Colore di sfondo se l'icona non copre tutto (bianco)
+  adaptive_icon_foreground: "assets/images/logo_round.png"
