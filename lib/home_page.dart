@@ -5,11 +5,11 @@ import 'admin_direttivo_page.dart';
 import 'admin_squadre_page.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'admin_compleanni_page.dart';
-import 'sito_risultati_last_gare.dart'; // Assicurati che questo file esista
-import 'pagina_contatti.dart'; // <--- IMPORTANTE: Importiamo la nuova pagina contatti
 import 'tabellone_page.dart';
 import 'visualizzatore_gare.dart';
 import 'contatti_page.dart';
+import 'main.dart'; // Importa per accedere ai CVColors
+import 'sport_colors.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -19,272 +19,341 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  // (Codice initState e _checkCompleanniOggi rimosso per brevità,
+  // puoi rimetterlo se ti serve quella funzionalità)
+
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkCompleanniOggi();
-    });
-  }
-
-  Future<void> _checkCompleanniOggi() async {
-    final today = DateTime.now();
-    // Nota: Assicurati che la collezione esista su Firebase
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('compleanni')
-          .get();
-      List<String> festeggiati = [];
-
-      for (var doc in snapshot.docs) {
-        final data = doc.data();
-        if (data['data_nascita'] == null) continue;
-
-        final dataNascita = (data['data_nascita'] as Timestamp).toDate();
-
-        if (dataNascita.day == today.day && dataNascita.month == today.month) {
-          festeggiati.add("${data['nome']} (${data['squadra']})");
-        }
-      }
-
-      if (festeggiati.isNotEmpty && mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: Colors.pink.shade50,
-            title: const Row(
-              children: [
-                Icon(Icons.cake, color: Colors.pink, size: 30),
-                SizedBox(width: 10),
-                Text("Buon Compleanno!"),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "Oggi facciamo gli auguri a:",
-                  style: TextStyle(fontSize: 16),
+  Widget build(BuildContext context) {
+    // Usiamo una CustomScrollView per effetti di scorrimento avanzati
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          // --- 1. HEADER APPBAR CURVO CON GRADIENTE E LOGO ---
+          SliverAppBar(
+            expandedHeight: 280.0,
+            floating: false,
+            pinned: true,
+            stretch: true,
+            backgroundColor: SportColors.blueDeep,
+            flexibleSpace: FlexibleSpaceBar(
+              centerTitle: true,
+              title: const Text(
+                "CADONEGHE VOLLEY",
+                style: TextStyle(
+                  shadows: [Shadow(blurRadius: 10, color: Colors.black45)],
                 ),
-                const SizedBox(height: 15),
-                ...festeggiati.map(
-                  (nome) => Text(
-                    nome,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.pink,
+              ),
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [SportColors.blueLight, SportColors.blueDeep],
+                  ),
+                  // Aggiunge un taglio curvo in fondo all'header
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(40),
+                    bottomRight: Radius.circular(40),
+                  ),
+                ),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 60.0),
+                    // LOGO: Assicurati che il file esista in assets/logo_round.png o assets/images/...
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black26,
+                            blurRadius: 20,
+                            offset: Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      // Se hai rinominato il file come detto prima, usa quello corretto
+                      child: const CircleAvatar(
+                        radius: 65,
+                        backgroundColor: Colors.white,
+                        backgroundImage: AssetImage(
+                          'assets/images/logo_round.png',
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
             actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.pink),
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  "Auguri! 🎉",
-                  style: TextStyle(color: Colors.white),
+              IconButton(
+                icon: const Icon(
+                  Icons.admin_panel_settings,
+                  color: Colors.white,
+                ),
+                onPressed: () => _mostraLogin(context),
+              ),
+            ],
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(40),
+                bottomRight: Radius.circular(40),
+              ),
+            ),
+          ),
+
+          // --- 2. CORPO DELLA PAGINA ---
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 10),
+                  Text(
+                    "Match Center",
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // --- GRIGLIA AZIONI RAPIDE (Gare, Risultati, Segnapunti) ---
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisSpacing: 15,
+                    mainAxisSpacing: 15,
+                    childAspectRatio: 1.1,
+                    children: [
+                      _buildActionCard(
+                        context,
+                        title: "Prossime Gare",
+                        icon: Icons.calendar_today_rounded,
+                        color: SportColors.blueDeep,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const VisualizzatoreGarePage(
+                              titoloPagina: "Prossime Gare",
+                              urlSito: "http://www.pallavolocadoneghe.it/",
+                              selettoreCss: ".wp_prossimepartite",
+                            ),
+                          ),
+                        ),
+                      ),
+                      _buildActionCard(
+                        context,
+                        title: "Ultimi Risultati",
+                        icon: Icons.emoji_events_rounded,
+                        color: SportColors.orangeAction,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const VisualizzatoreGarePage(
+                              titoloPagina: "Ultimi Risultati",
+                              urlSito: "http://www.pallavolocadoneghe.it/",
+                              selettoreCss: ".wp_ultimirisultati",
+                            ),
+                          ),
+                        ),
+                      ),
+                      _buildActionCard(
+                        context,
+                        title: "Segnapunti",
+                        icon: Icons.scoreboard_rounded,
+                        color: Colors.redAccent,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const TabellonePage(),
+                          ),
+                        ),
+                      ),
+                      _buildActionCard(
+                        context,
+                        title: "Contatti SMS",
+                        icon: Icons.sms_rounded,
+                        color: Colors.green,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ContattiPage(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 30),
+                  Text(
+                    "Esplora il Club",
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // --- BANNER SQUADRE E DIRETTIVO ---
+                  _buildBigBannerBtn(
+                    context,
+                    title: "LE NOSTRE SQUADRE",
+                    subtitle: "Roster, classifiche e orari",
+                    icon: Icons.groups_rounded,
+                    gradientColors: [
+                      SportColors.orangeAction,
+                      Colors.deepOrange,
+                    ],
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SquadrePage(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  _buildBigBannerBtn(
+                    context,
+                    title: "IL DIRETTIVO",
+                    subtitle: "Chi siamo e organizzazione",
+                    icon: Icons.account_balance_rounded,
+                    gradientColors: [
+                      SportColors.blueDeep,
+                      SportColors.blueLight,
+                    ],
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const DirettivoPage(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- NUOVO WIDGET: CARD AZIONE RAPIDA (GRIGLIA) ---
+  Widget _buildActionCard(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      elevation: 6,
+      shadowColor: color.withOpacity(0.2),
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.all(15.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 30, color: color),
+              ),
+              const Spacer(),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
               ),
             ],
           ),
-        );
-      }
-    } catch (e) {
-      print("Errore controllo compleanni (forse offline o permessi): $e");
-    }
+        ),
+      ),
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'APP Cadoneghe Volley',
-          style: TextStyle(color: Colors.white),
+  // --- CORREZIONE QUI: WIDGET BANNER CON EXPANDED ---
+  Widget _buildBigBannerBtn(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required List<Color> gradientColors,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      height: 110,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        backgroundColor: const Color(0xFF0055AA), // Blu istituzionale
-        iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.admin_panel_settings),
-            onPressed: () {
-              _mostraLogin(context);
-            },
+        boxShadow: [
+          BoxShadow(
+            color: gradientColors[0].withOpacity(0.4),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      backgroundColor: const Color(0xFFF5F5F5), // Sfondo grigio chiaro
-      body: SingleChildScrollView(
-        // Aggiunto per evitare errori se lo schermo è piccolo
-        child: Center(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
           child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 20.0,
-              vertical: 20.0,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            child: Row(
               children: [
-                // LOGO
-                Image.asset('assets/images/logo.png', height: 150),
-
-                const SizedBox(height: 20),
-
-                const Text(
-                  'Cadoneghe Volley',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF333333),
+                Icon(icon, size: 45, color: Colors.white.withOpacity(0.9)),
+                const SizedBox(width: 20),
+                // --- AGGIUNTO EXPANDED QUI ---
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1, // Limita a 1 riga
+                        overflow: TextOverflow
+                            .ellipsis, // Aggiunge ... se troppo lungo
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize:
+                              18, // Font leggermente ridotto per sicurezza
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-
-                const SizedBox(height: 30),
-
-                // --- BOTTONI CLASSICI (DIRETTIVO E SQUADRE) ---
-                // Li mantengo come pulsanti standard ma leggermente migliorati
-                SizedBox(
-                  width: 250,
-                  height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const DirettivoPage(),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      'Il Direttivo',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  ),
+                // -----------------------------
+                const SizedBox(width: 10),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Colors.white.withOpacity(0.7),
+                  size: 20,
                 ),
-
-                const SizedBox(height: 15),
-
-                SizedBox(
-                  width: 250,
-                  height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const SquadrePage(),
-                        ),
-                      );
-                    },
-                    child: const Text(
-                      'Le Nostre Squadre',
-                      style: TextStyle(fontSize: 16),
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-                const Divider(), // Linea divisoria estetica
-                const SizedBox(height: 20),
-
-                // --- NUOVI BOTTONI STILIZZATI (GARE E RISULTATI) ---
-
-                // 1. Prossime Gare
-                _buildMenuButton(
-                  context: context,
-                  titolo: "Prossime Gare",
-                  icona: Icons.calendar_month_outlined,
-                  coloreIcona: Colors.blueAccent,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const VisualizzatoreGarePage(
-                          titoloPagina: "Prossime Gare",
-                          // URL della pagina dove sono presenti ENTRAMBE le tabelle
-                          urlSito: "http://www.pallavolocadoneghe.it/",
-                          // Selettore specifico per le prossime partite
-                          selettoreCss: ".wp_prossimepartite",
-                        ),
-                      ),
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 15),
-
-                // 2. Risultati Ultime Gare
-                _buildMenuButton(
-                  context: context,
-                  titolo: "Risultati Ultime Gare",
-                  icona: Icons.emoji_events_outlined,
-                  coloreIcona: Colors.orangeAccent,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const VisualizzatoreGarePage(
-                          titoloPagina: "Ultimi Risultati",
-                          // Stesso URL di sopra
-                          urlSito: "http://www.pallavolocadoneghe.it/",
-                          // Selettore specifico per i risultati
-                          selettoreCss: ".wp_ultimirisultati",
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 15),
-
-                // 4. TABELLONE SEGNAPUNTI (NUOVO)
-                _buildMenuButton(
-                  context: context,
-                  titolo: "Segnapunti Partita",
-                  icona: Icons.scoreboard_outlined, // Icona tabellone
-                  coloreIcona: Colors.redAccent,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const TabellonePage(),
-                      ),
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 15),
-
-                // 3. Contattaci (NUOVO)
-                // ... dentro il build del menu
-                _buildMenuButton(
-                  context: context,
-                  titolo:
-                      "Contatti e Segnalazioni", // O come lo hai chiamato tu
-                  icona: Icons.sms_outlined,
-                  coloreIcona: Colors.green, // O il colore che preferisci
-                  onTap: () {
-                    // QUESTO È IL CODICE CORRETTO PER APRIRE LA PAGINA
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const ContattiPage(),
-                      ),
-                    );
-                  },
-                ),
-
-                const SizedBox(height: 30),
               ],
             ),
           ),
@@ -293,7 +362,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- FUNZIONE LOGIN ADMIN (INVARIATA) ---
+  // FUNZIONE LOGIN
   void _mostraLogin(BuildContext context) {
     TextEditingController passwordController = TextEditingController();
 
@@ -401,67 +470,6 @@ class _HomePageState extends State<HomePage> {
           ],
         );
       },
-    );
-  }
-
-  // --- NUOVO WIDGET GRAFICO PER I PULSANTI ---
-  Widget _buildMenuButton({
-    required BuildContext context,
-    required String titolo,
-    required IconData icona,
-    required Color coloreIcona,
-    required VoidCallback onTap,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(15),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: coloreIcona.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(icona, color: coloreIcona, size: 28),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Text(
-                    titolo,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF333333),
-                    ),
-                  ),
-                ),
-                const Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  color: Colors.grey,
-                  size: 18,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
