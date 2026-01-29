@@ -9,10 +9,10 @@ import 'admin_squadre_page.dart';
 import 'admin_compleanni_page.dart';
 import 'admin_comunicazioni_page.dart';
 import 'admin_documenti_page.dart';
-import 'admin_sponsor_page.dart'; // <--- NUOVO IMPORT
+import 'admin_sponsor_page.dart';
 import 'comunicazioni_page.dart';
 import 'documenti_page.dart';
-import 'sponsor_page.dart'; // <--- NUOVO IMPORT
+import 'sponsor_page.dart';
 import 'tabellone_page.dart';
 import 'visualizzatore_gare.dart';
 import 'contatti_page.dart';
@@ -34,8 +34,8 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // --- 1. CONTROLLO NEWS URGENTI ---
   Future<void> _checkComunicazioniUrgenti() async {
-    // ... (Mantieni la logica popup invariata) ...
     try {
       var query = await FirebaseFirestore.instance
           .collection('comunicazioni')
@@ -55,7 +55,7 @@ class _HomePageState extends State<HomePage> {
 
         if (idUltimaLetta != idNews) {
           if (mounted) {
-            showDialog(
+            await showDialog(
               context: context,
               barrierDismissible: false,
               builder: (ctx) => AlertDialog(
@@ -115,8 +115,100 @@ class _HomePageState extends State<HomePage> {
           }
         }
       }
+
+      // --- 2. DOPO LE NEWS, CONTROLLIAMO I COMPLEANNI ---
+      if (mounted) {
+        _checkCompleanniOggi();
+      }
     } catch (e) {
       debugPrint("Errore check news: $e");
+      // Se fallisce le news, proviamo comunque i compleanni
+      if (mounted) _checkCompleanniOggi();
+    }
+  }
+
+  // --- 3. LOGICA COMPLEANNI ---
+  Future<void> _checkCompleanniOggi() async {
+    final now = DateTime.now();
+    final todayDay = now.day;
+    final todayMonth = now.month;
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('compleanni')
+          .get();
+      List<String> festeggiati = [];
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        if (data['data_nascita'] != null) {
+          DateTime dataNascita = (data['data_nascita'] as Timestamp).toDate();
+          if (dataNascita.day == todayDay && dataNascita.month == todayMonth) {
+            festeggiati.add("${data['nome']} (${data['squadra']})");
+          }
+        }
+      }
+
+      if (festeggiati.isNotEmpty) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: Colors.pink.shade50,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.cake, color: Colors.pink, size: 30),
+                SizedBox(width: 10),
+                // --- CORREZIONE QUI: Aggiunto Expanded ---
+                Expanded(
+                  child: Text(
+                    "Buon Compleanno!",
+                    style: TextStyle(
+                      color: Colors.pink,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Tanti auguri a:", style: TextStyle(fontSize: 16)),
+                const SizedBox(height: 10),
+                ...festeggiati.map(
+                  (f) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      "• $f",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.pink),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text(
+                  "Auguri!",
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Errore compleanni: $e");
     }
   }
 
@@ -125,7 +217,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          // HEADER (Invariato)
+          // HEADER
           SliverAppBar(
             expandedHeight: 260.0,
             floating: false,
@@ -219,6 +311,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
+          // CORPO
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20.0),
@@ -232,7 +325,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 20),
 
-                  // GRIGLIA PULSANTI (Invariata)
+                  // GRIGLIA PULSANTI
                   GridView.count(
                     crossAxisCount: 2,
                     shrinkWrap: true,
@@ -253,7 +346,6 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
-
                       _buildActionCard(
                         context,
                         title: "Prossime Gare",
@@ -270,7 +362,6 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
-
                       _buildActionCard(
                         context,
                         title: "Ultimi Risultati",
@@ -287,7 +378,6 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
-
                       _buildActionCard(
                         context,
                         title: "Segnapunti",
@@ -300,7 +390,6 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
-
                       _buildActionCard(
                         context,
                         title: "Area Download",
@@ -361,7 +450,6 @@ class _HomePageState extends State<HomePage> {
 
                   const SizedBox(height: 15),
 
-                  // --- NUOVO BANNER SPONSOR ---
                   _buildBigBannerBtn(
                     context,
                     title: "I NOSTRI PARTNER",
@@ -402,7 +490,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Widget helper rimasti invariati (_buildActionCard, _buildBigBannerBtn) ...
   Widget _buildActionCard(
     BuildContext context, {
     required String title,
@@ -597,8 +684,6 @@ class _HomePageState extends State<HomePage> {
                                 );
                               },
                             ),
-
-                            // --- NUOVO LINK GESTIONE SPONSOR ---
                             ListTile(
                               leading: const Icon(
                                 Icons.handshake,
@@ -615,7 +700,6 @@ class _HomePageState extends State<HomePage> {
                                 );
                               },
                             ),
-
                             ListTile(
                               leading: const Icon(
                                 Icons.people,
