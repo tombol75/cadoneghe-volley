@@ -8,9 +8,11 @@ import 'admin_direttivo_page.dart';
 import 'admin_squadre_page.dart';
 import 'admin_compleanni_page.dart';
 import 'admin_comunicazioni_page.dart';
-import 'admin_documenti_page.dart'; // <--- NUOVO IMPORT ADMIN
+import 'admin_documenti_page.dart';
+import 'admin_sponsor_page.dart'; // <--- NUOVO IMPORT
 import 'comunicazioni_page.dart';
-import 'documenti_page.dart'; // <--- NUOVO IMPORT USER
+import 'documenti_page.dart';
+import 'sponsor_page.dart'; // <--- NUOVO IMPORT
 import 'tabellone_page.dart';
 import 'visualizzatore_gare.dart';
 import 'contatti_page.dart';
@@ -33,6 +35,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _checkComunicazioniUrgenti() async {
+    // ... (Mantieni la logica popup invariata) ...
     try {
       var query = await FirebaseFirestore.instance
           .collection('comunicazioni')
@@ -122,6 +125,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
+          // HEADER (Invariato)
           SliverAppBar(
             expandedHeight: 260.0,
             floating: false,
@@ -228,6 +232,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 20),
 
+                  // GRIGLIA PULSANTI (Invariata)
                   GridView.count(
                     crossAxisCount: 2,
                     shrinkWrap: true,
@@ -296,7 +301,6 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
 
-                      // --- NUOVO TASTO DOCUMENTI ---
                       _buildActionCard(
                         context,
                         title: "Area Download",
@@ -357,6 +361,23 @@ class _HomePageState extends State<HomePage> {
 
                   const SizedBox(height: 15),
 
+                  // --- NUOVO BANNER SPONSOR ---
+                  _buildBigBannerBtn(
+                    context,
+                    title: "I NOSTRI PARTNER",
+                    subtitle: "Sponsor e collaborazioni",
+                    icon: Icons.handshake,
+                    gradientColors: [Colors.indigo, Colors.blueAccent],
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SponsorPage(),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+
                   _buildBigBannerBtn(
                     context,
                     title: "CONTATTACI",
@@ -381,6 +402,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Widget helper rimasti invariati (_buildActionCard, _buildBigBannerBtn) ...
   Widget _buildActionCard(
     BuildContext context, {
     required String title,
@@ -559,7 +581,6 @@ class _HomePageState extends State<HomePage> {
                                 );
                               },
                             ),
-                            // --- NUOVO LINK ADMIN DOCUMENTI ---
                             ListTile(
                               leading: const Icon(
                                 Icons.description,
@@ -572,6 +593,24 @@ class _HomePageState extends State<HomePage> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (c) => const AdminDocumentiPage(),
+                                  ),
+                                );
+                              },
+                            ),
+
+                            // --- NUOVO LINK GESTIONE SPONSOR ---
+                            ListTile(
+                              leading: const Icon(
+                                Icons.handshake,
+                                color: Colors.indigo,
+                              ),
+                              title: const Text("Gestisci Sponsor"),
+                              onTap: () {
+                                Navigator.pop(sheetContext);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) => const AdminSponsorPage(),
                                   ),
                                 );
                               },
