@@ -1,4 +1,4 @@
-package it.tommaso.cadoneghevolley
+package it.tom.cadoneghevolley
 
 import io.flutter.embedding.android.FlutterActivity
 

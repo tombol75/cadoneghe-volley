@@ -278,16 +278,6 @@ class _HomePageState extends State<HomePage> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 15),
-                        const Text(
-                          "CADONEGHE VOLLEY",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 22,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
                       ],
                     ),
                   ),

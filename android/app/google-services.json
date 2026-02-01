@@ -26,6 +26,25 @@
     },
     {
       "client_info": {
+        "mobilesdk_app_id": "1:513634319009:android:6078dcdaa7489fb8810ee0",
+        "android_client_info": {
+          "package_name": "it.tom.cadoneghevolley"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9tDEZ5wbpxyOBmItkZWp7FrkHLkp37Ig"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:513634319009:android:3593d2f6cf68a5c7810ee0",
         "android_client_info": {
           "package_name": "it.tommaso.cadoneghevolley"
