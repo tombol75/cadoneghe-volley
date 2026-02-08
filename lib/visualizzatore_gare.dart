@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as parser;
+import 'package:html/dom.dart' as dom; // Necessario per manipolare il DOM
 
 class VisualizzatoreGarePage extends StatefulWidget {
   final String titoloPagina;
@@ -50,6 +51,34 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
       if (elementoTarget == null) {
         throw Exception("Elemento '${widget.selettoreCss}' non trovato.");
       }
+
+      // --- NUOVA LOGICA: ESPLICITARE INFO GARA ---
+      // Cerchiamo tutte le immagini dentro la tabella (le icone info)
+      List<dom.Element> immagini = elementoTarget.querySelectorAll('img');
+
+      for (var img in immagini) {
+        // Spesso le info sono in 'title' o 'alt'
+        String? infoText = img.attributes['title'];
+        if (infoText == null || infoText.isEmpty) {
+          infoText = img.attributes['alt'];
+        }
+
+        // Se abbiamo trovato del testo (es. "Dom 12/02 ore 15:00...")
+        if (infoText != null && infoText.isNotEmpty && infoText != "info") {
+          // Creiamo un nuovo elemento HTML (div) con il testo
+          // Usiamo un po' di CSS per renderlo leggibile
+          var nuovoElemento = dom.Element.html(
+            '<div style="font-size: 13px; color: #0055AA; font-weight: bold; background-color: #e3f2fd; padding: 5px; border-radius: 4px; margin-top: 5px; display: inline-block;">$infoText</div>',
+          );
+
+          // Sostituiamo l'immagine (icona) con il testo esplicito
+          img.replaceWith(nuovoElemento);
+        } else {
+          // Se non c'è testo utile, rimuoviamo l'icona per pulizia
+          img.remove();
+        }
+      }
+      // -------------------------------------------
 
       // --- HTML PULITO: VERSIONE TABELLA CLASSICA ---
       String htmlPulito =
@@ -113,7 +142,8 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
               font-weight: bold;
             }
 
-            img { max-width: 30px; height: auto; vertical-align: middle; margin-right: 5px; }
+            /* Rimuoviamo eventuali immagini residue che non siamo riusciti a sostituire */
+            img { display: none; }
 
           </style>
         </head>
