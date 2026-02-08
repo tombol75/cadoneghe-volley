@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:html/parser.dart' as parser;
-import 'package:html/dom.dart' as dom; // Necessario per manipolare il DOM
+import 'package:html/dom.dart' as dom;
+import 'package:url_launcher/url_launcher.dart';
 
 class VisualizzatoreGarePage extends StatefulWidget {
   final String titoloPagina;
@@ -28,60 +29,205 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
   @override
   void initState() {
     super.initState();
+
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(const Color(0xFFFFFFFF)); // Sfondo bianco pulito
+      ..setBackgroundColor(const Color(0xFFFFFFFF))
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (NavigationRequest request) async {
+            // --- NUOVA LOGICA DI INTERCETTAZIONE ROBUSTA ---
+            // Intercettiamo il nostro schema personalizzato "app://aprimappe"
+            if (request.url.startsWith("app://aprimappe")) {
+              // 1. Estraiamo l'indirizzo dai parametri dell'URL
+              final Uri uri = Uri.parse(request.url);
+              final String? queryAddress = uri.queryParameters['q'];
 
-    _caricaETrasformaSito();
+              if (queryAddress != null && queryAddress.isNotEmpty) {
+                // 2. Costruiamo il vero link per Google Maps
+                final Uri mapsUrl = Uri.parse(
+                  "https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(queryAddress)}",
+                );
+
+                // 3. Lanciamo l'app esterna
+                if (await canLaunchUrl(mapsUrl)) {
+                  await launchUrl(
+                    mapsUrl,
+                    mode: LaunchMode.externalApplication,
+                  );
+                } else {
+                  // Fallback se non riesce ad aprire l'app (es. apre nel browser)
+                  await launchUrl(mapsUrl);
+                }
+              }
+              return NavigationDecision
+                  .prevent; // Blocca la navigazione interna alla WebView
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      );
+
+    _caricaDatiFipav();
   }
 
-  Future<void> _caricaETrasformaSito() async {
+  String _calcolaDataLunediCorrente() {
+    DateTime now = DateTime.now();
+    int giorniDaSottrarre = now.weekday - 1;
+    DateTime lunedi = now.subtract(Duration(days: giorniDaSottrarre));
+
+    String giorno = lunedi.day.toString().padLeft(2, '0');
+    String mese = lunedi.month.toString().padLeft(2, '0');
+    String anno = lunedi.year.toString();
+
+    return "$giorno/$mese/$anno";
+  }
+
+  // --- FUNZIONE DI PULIZIA AGGIORNATA ---
+  String _pulisciIndirizzoHtml(String? rawHtml) {
+    if (rawHtml == null || rawHtml.isEmpty) return "";
+
     try {
-      final response = await http.get(Uri.parse(widget.urlSito));
+      // 1. Sostituiamo i <br> con spazi
+      String htmlConSpazi = rawHtml.replaceAll(
+        RegExp(r'<br\s*/?>', caseSensitive: false),
+        ' - ',
+      );
+
+      // 2. Parsifichiamo l'HTML
+      var fragment = parser.parseFragment(htmlConSpazi);
+
+      // 3. Rimuoviamo la designazione arbitrale se presente
+      fragment.querySelectorAll('.designazione').forEach((e) => e.remove());
+
+      // 4. Estraiamo solo il testo puro
+      String testoPuro = fragment.text ?? "";
+
+      // 5. Ripuliamo spazi doppi, a capo e trim finale
+      return testoPuro.replaceAll(RegExp(r'\s+'), ' ').trim();
+    } catch (e) {
+      return rawHtml;
+    }
+  }
+
+  Future<void> _caricaDatiFipav() async {
+    try {
+      String dataLunedi = _calcolaDataLunediCorrente();
+      String dataEncoded = dataLunedi.replaceAll('/', '%2F');
+
+      String urlFipav =
+          "https://www.fipavpd.net/risultati-classifiche.aspx?"
+          "ComitatoId=3&"
+          "StId=2265&"
+          "DataDa=$dataEncoded&"
+          "StatoGara=1&"
+          "CId=&"
+          "SId=45&"
+          "PId=16651&"
+          "btFiltro=CERCA";
+
+      final response = await http.get(Uri.parse(urlFipav));
 
       if (response.statusCode != 200) {
-        throw Exception("Errore server: ${response.statusCode}");
+        throw Exception("Errore server FIPAV: ${response.statusCode}");
       }
 
       var document = parser.parse(response.body);
+      var tabelle = document.querySelectorAll('table');
 
-      // Cerchiamo la tabella specifica
-      var elementoTarget = document.querySelector(widget.selettoreCss);
+      StringBuffer htmlContenutoGare = StringBuffer();
+      int tabelleTrovate = 0;
 
-      if (elementoTarget == null) {
-        throw Exception("Elemento '${widget.selettoreCss}' non trovato.");
+      for (var tabella in tabelle) {
+        if (tabella.innerHtml.contains("Gara") &&
+            tabella.innerHtml.contains("Squadra")) {
+          tabelleTrovate++;
+
+          String nomeCampionato = "";
+          var caption = tabella.querySelector('caption');
+          if (caption != null) {
+            nomeCampionato = caption.text.trim();
+            caption.remove();
+          } else {
+            nomeCampionato = "Campionato";
+          }
+
+          var righe = tabella.querySelectorAll('tr');
+          for (var riga in righe) {
+            var immagini = riga.querySelectorAll('img');
+
+            for (var img in immagini) {
+              String? rawInfo = img.attributes['title'];
+              if (rawInfo == null || rawInfo.isEmpty) {
+                rawInfo = img.attributes['alt'];
+              }
+
+              if (rawInfo != null && rawInfo.isNotEmpty) {
+                bool isStatoGara =
+                    rawInfo.toLowerCase().contains("gara") ||
+                    rawInfo.toLowerCase().contains("risultato") ||
+                    rawInfo.toLowerCase().contains("spostata") ||
+                    rawInfo.toLowerCase().contains("rinviata");
+
+                String infoPulita = _pulisciIndirizzoHtml(rawInfo);
+
+                if (isStatoGara) {
+                  var labelStato = dom.Element.html(
+                    '''<div style="font-size: 10px; color: #666; font-style: italic; white-space: nowrap;">$infoPulita</div>''',
+                  );
+                  img.replaceWith(labelStato);
+                } else if (infoPulita.length > 5) {
+                  // --- USO DELLO SCHEMA PERSONALIZZATO ---
+                  // Costruiamo un link finto che la WebView intercetterà
+                  // Esempio: app://aprimappe?q=Palestra+Comunale+...
+                  String fakeUrl =
+                      "app://aprimappe?q=${Uri.encodeComponent(infoPulita)}";
+
+                  var linkMaps = dom.Element.html('''
+                    <a href="$fakeUrl" style="text-decoration: none; display: block; margin-top: 4px;">
+                      <div style="
+                        background-color: #e3f2fd; 
+                        color: #0055AA; 
+                        border: 1px solid #0055AA;
+                        border-radius: 6px; 
+                        padding: 6px; 
+                        font-size: 11px; 
+                        font-weight: bold;
+                        text-align: center;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                      ">
+                        📍 NAVIGA
+                        <div style="font-weight: normal; font-size: 10px; margin-top: 2px; color: #333;">$infoPulita</div>
+                      </div>
+                    </a>
+                    ''');
+                  img.replaceWith(linkMaps);
+                } else {
+                  img.remove();
+                }
+              } else {
+                img.remove();
+              }
+            }
+          }
+
+          if (nomeCampionato.isNotEmpty) {
+            htmlContenutoGare.write(
+              '<h4 style="color: #d32f2f; margin-top: 30px; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px;">$nomeCampionato</h4>',
+            );
+          }
+
+          htmlContenutoGare.write('<div class="table-wrapper">');
+          htmlContenutoGare.write(tabella.outerHtml);
+          htmlContenutoGare.write('</div>');
+        }
       }
 
-      // --- NUOVA LOGICA: ESPLICITARE INFO GARA ---
-      // Cerchiamo tutte le immagini dentro la tabella (le icone info)
-      List<dom.Element> immagini = elementoTarget.querySelectorAll('img');
-
-      for (var img in immagini) {
-        // Spesso le info sono in 'title' o 'alt'
-        String? infoText = img.attributes['title'];
-        if (infoText == null || infoText.isEmpty) {
-          infoText = img.attributes['alt'];
-        }
-
-        // Se abbiamo trovato del testo (es. "Dom 12/02 ore 15:00...")
-        if (infoText != null && infoText.isNotEmpty && infoText != "info") {
-          // Creiamo un nuovo elemento HTML (div) con il testo
-          // Usiamo un po' di CSS per renderlo leggibile
-          var nuovoElemento = dom.Element.html(
-            '<div style="font-size: 13px; color: #0055AA; font-weight: bold; background-color: #e3f2fd; padding: 5px; border-radius: 4px; margin-top: 5px; display: inline-block;">$infoText</div>',
-          );
-
-          // Sostituiamo l'immagine (icona) con il testo esplicito
-          img.replaceWith(nuovoElemento);
-        } else {
-          // Se non c'è testo utile, rimuoviamo l'icona per pulizia
-          img.remove();
-        }
+      if (tabelleTrovate == 0) {
+        throw Exception("Nessuna gara trovata per questa settimana.");
       }
-      // -------------------------------------------
 
-      // --- HTML PULITO: VERSIONE TABELLA CLASSICA ---
-      String htmlPulito =
+      String htmlFinale =
           '''
         <!DOCTYPE html>
         <html>
@@ -89,81 +235,67 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
             body { 
-              font-family: 'Helvetica', 'Arial', sans-serif; 
+              font-family: 'Roboto', sans-serif; 
               background-color: #FFFFFF; 
               margin: 0; 
-              padding: 10px; 
+              padding: 15px; 
+              padding-bottom: 50px;
             }
-            
-            /* Contenitore per lo scroll orizzontale se la tabella è larga */
+            h3.main-title { color: #0055AA; text-align: center; margin-bottom: 10px; }
+            h4 { font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
             .table-wrapper {
               width: 100%;
-              overflow-x: auto; /* Abilita scroll orizzontale */
-              -webkit-overflow-scrolling: touch; /* Scroll fluido su iOS */
-              box-shadow: 0 0 10px rgba(0,0,0,0.05);
+              overflow-x: auto;
+              box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+              border-radius: 8px;
+              margin-bottom: 20px;
+              border: 1px solid #eee;
             }
-
-            /* STILE TABELLA CLASSICO */
             table { 
               width: 100%; 
               border-collapse: collapse; 
-              min-width: 500px; /* Forza la larghezza minima per non schiacciare il testo */
-              font-size: 14px;
+              min-width: 600px; 
+              font-size: 13px;
             }
-
-            /* Intestazione (se presente) */
             th {
               background-color: #0055AA;
               color: white;
-              padding: 12px 8px;
+              padding: 10px;
               text-align: left;
+              white-space: nowrap;
+              font-size: 12px;
             }
-
-            /* Celle */
             td { 
-              padding: 10px 8px; 
-              border-bottom: 1px solid #ddd;
+              padding: 10px; 
+              border-bottom: 1px solid #eee;
               color: #333;
               vertical-align: middle;
             }
-
-            /* Righe alterne per leggibilità (Zebra striping) */
             tr:nth-child(even) { background-color: #f9f9f9; }
-            tr:hover { background-color: #f1f1f1; }
-
-            /* Miglioramenti estetici specifici */
-            
-            /* Link e testo in blu */
-            a { text-decoration: none; color: #0055AA; font-weight: bold; }
-            
-            /* Evidenzia Risultato (solitamente colonna centrale) */
-            td strong, td b {
-              color: #000;
+            td:contains("CADONEGHE"), td:contains("Cadoneghe") {
               font-weight: bold;
+              color: #d32f2f;
             }
-
-            /* Rimuoviamo eventuali immagini residue che non siamo riusciti a sostituire */
-            img { display: none; }
-
           </style>
         </head>
         <body>
-          <h3 style="color: #0055AA; text-align: center; margin-bottom: 15px;">${widget.titoloPagina}</h3>
-          
-          <div class="table-wrapper">
-            ${elementoTarget.outerHtml}
+          <h3 class="main-title">${widget.titoloPagina}</h3>
+          ${htmlContenutoGare.toString()}
+          <div style="text-align: center; margin-top: 30px; color: #999; font-size: 11px;">
+            Fonte: Fipav Padova (Settimana del $dataLunedi)<br>
+            Codice Società: 45
           </div>
-
         </body>
         </html>
       ''';
 
-      await _controller.loadHtmlString(htmlPulito, baseUrl: widget.urlSito);
+      await _controller.loadHtmlString(
+        htmlFinale,
+        baseUrl: "https://www.fipavpd.net/",
+      );
 
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _isLoading = false);
       }
     } catch (e) {
       if (mounted) {
@@ -190,7 +322,7 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
                 _isLoading = true;
                 _errorMessage = null;
               });
-              _caricaETrasformaSito();
+              _caricaDatiFipav();
             },
           ),
         ],
@@ -201,10 +333,40 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
             Center(
               child: Padding(
                 padding: const EdgeInsets.all(20),
-                child: Text(
-                  "Errore caricamento dati:\n$_errorMessage",
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.red),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.calendar_today,
+                      color: Colors.grey,
+                      size: 50,
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      "Nessuna gara in programma",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    const Text(
+                      "Non ci sono partite previste per questa settimana\no impossibile recuperare i dati.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _isLoading = true;
+                          _errorMessage = null;
+                        });
+                        _caricaDatiFipav();
+                      },
+                      child: const Text("Aggiorna"),
+                    ),
+                  ],
                 ),
               ),
             ),

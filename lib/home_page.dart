@@ -162,7 +162,6 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Icon(Icons.cake, color: Colors.pink, size: 30),
                 SizedBox(width: 10),
-                // --- CORREZIONE QUI: Aggiunto Expanded ---
                 Expanded(
                   child: Text(
                     "Buon Compleanno!",
