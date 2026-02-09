@@ -36,32 +36,30 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) async {
-            // --- NUOVA LOGICA DI INTERCETTAZIONE ROBUSTA ---
-            // Intercettiamo il nostro schema personalizzato "app://aprimappe"
+            // --- LOGICA DI INTERCETTAZIONE MAPPE ---
             if (request.url.startsWith("app://aprimappe")) {
-              // 1. Estraiamo l'indirizzo dai parametri dell'URL
               final Uri uri = Uri.parse(request.url);
               final String? queryAddress = uri.queryParameters['q'];
 
               if (queryAddress != null && queryAddress.isNotEmpty) {
-                // 2. Costruiamo il vero link per Google Maps
                 final Uri mapsUrl = Uri.parse(
                   "https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(queryAddress)}",
                 );
 
-                // 3. Lanciamo l'app esterna
-                if (await canLaunchUrl(mapsUrl)) {
-                  await launchUrl(
-                    mapsUrl,
-                    mode: LaunchMode.externalApplication,
-                  );
-                } else {
-                  // Fallback se non riesce ad aprire l'app (es. apre nel browser)
-                  await launchUrl(mapsUrl);
+                try {
+                  if (await canLaunchUrl(mapsUrl)) {
+                    await launchUrl(
+                      mapsUrl,
+                      mode: LaunchMode.externalApplication,
+                    );
+                  } else {
+                    await launchUrl(mapsUrl);
+                  }
+                } catch (e) {
+                  debugPrint("Impossibile aprire mappa: $e");
                 }
               }
-              return NavigationDecision
-                  .prevent; // Blocca la navigazione interna alla WebView
+              return NavigationDecision.prevent;
             }
             return NavigationDecision.navigate;
           },
@@ -83,30 +81,34 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
     return "$giorno/$mese/$anno";
   }
 
-  // --- FUNZIONE DI PULIZIA AGGIORNATA ---
   String _pulisciIndirizzoHtml(String? rawHtml) {
     if (rawHtml == null || rawHtml.isEmpty) return "";
 
     try {
-      // 1. Sostituiamo i <br> con spazi
-      String htmlConSpazi = rawHtml.replaceAll(
-        RegExp(r'<br\s*/?>', caseSensitive: false),
-        ' - ',
-      );
+      var fragment = parser.parseFragment(rawHtml);
 
-      // 2. Parsifichiamo l'HTML
-      var fragment = parser.parseFragment(htmlConSpazi);
-
-      // 3. Rimuoviamo la designazione arbitrale se presente
       fragment.querySelectorAll('.designazione').forEach((e) => e.remove());
 
-      // 4. Estraiamo solo il testo puro
+      fragment.querySelectorAll('*').forEach((e) {
+        String testoElem = (e.text ?? "").toLowerCase();
+        if (testoElem.contains('arbitro') || testoElem.contains('designato')) {
+          e.remove();
+        }
+      });
+
+      fragment.querySelectorAll('br').forEach((br) {
+        br.replaceWith(dom.Text(' - '));
+      });
+
       String testoPuro = fragment.text ?? "";
 
-      // 5. Ripuliamo spazi doppi, a capo e trim finale
+      testoPuro = testoPuro
+          .replaceAll("Arbitro designato", "")
+          .replaceAll("Arbitro associato", "");
+
       return testoPuro.replaceAll(RegExp(r'\s+'), ' ').trim();
     } catch (e) {
-      return rawHtml;
+      return rawHtml ?? "";
     }
   }
 
@@ -120,7 +122,7 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
           "ComitatoId=3&"
           "StId=2265&"
           "DataDa=$dataEncoded&"
-          "StatoGara=1&"
+          "StatoGara=0&"
           "CId=&"
           "SId=45&"
           "PId=16651&"
@@ -163,23 +165,29 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
               }
 
               if (rawInfo != null && rawInfo.isNotEmpty) {
+                // --- FILTRO POTENZIATO ---
+                String txtCheck = rawInfo.toLowerCase();
+
                 bool isStatoGara =
-                    rawInfo.toLowerCase().contains("gara") ||
-                    rawInfo.toLowerCase().contains("risultato") ||
-                    rawInfo.toLowerCase().contains("spostata") ||
-                    rawInfo.toLowerCase().contains("rinviata");
+                    txtCheck.contains("gara") ||
+                    txtCheck.contains("risultato") ||
+                    txtCheck.contains("spostata") ||
+                    txtCheck.contains("rinviata") ||
+                    txtCheck.contains("disputare") || // <--- AGGIUNTO
+                    txtCheck.contains("sospesa") || // <--- AGGIUNTO
+                    txtCheck.contains("annullata") || // <--- AGGIUNTO
+                    txtCheck.contains("non disputata");
 
                 String infoPulita = _pulisciIndirizzoHtml(rawInfo);
 
                 if (isStatoGara) {
+                  // STATO GARA -> Solo testo semplice
                   var labelStato = dom.Element.html(
                     '''<div style="font-size: 10px; color: #666; font-style: italic; white-space: nowrap;">$infoPulita</div>''',
                   );
                   img.replaceWith(labelStato);
                 } else if (infoPulita.length > 5) {
-                  // --- USO DELLO SCHEMA PERSONALIZZATO ---
-                  // Costruiamo un link finto che la WebView intercetterà
-                  // Esempio: app://aprimappe?q=Palestra+Comunale+...
+                  // INDIRIZZO -> Link Mappe
                   String fakeUrl =
                       "app://aprimappe?q=${Uri.encodeComponent(infoPulita)}";
 
@@ -203,6 +211,7 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
                     ''');
                   img.replaceWith(linkMaps);
                 } else {
+                  // Se troppo corto o ignoto, rimuoviamo
                   img.remove();
                 }
               } else {
