@@ -42,23 +42,28 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
               final String? queryAddress = uri.queryParameters['q'];
 
               if (queryAddress != null && queryAddress.isNotEmpty) {
+                // 1. COSTRUIAMO IL LINK UFFICIALE DI GOOGLE MAPS
+                // Questo formato funziona sia su Android che su iOS
                 final Uri mapsUrl = Uri.parse(
                   "https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(queryAddress)}",
                 );
 
                 try {
+                  // 2. PROVIAMO AD APRIRE L'APP ESTERNA
                   if (await canLaunchUrl(mapsUrl)) {
                     await launchUrl(
                       mapsUrl,
                       mode: LaunchMode.externalApplication,
                     );
                   } else {
+                    // Fallback nel browser se l'app non c'è
                     await launchUrl(mapsUrl);
                   }
                 } catch (e) {
-                  debugPrint("Impossibile aprire mappa: $e");
+                  debugPrint("Errore apertura mappa: $e");
                 }
               }
+              // Blocchiamo la navigazione dentro la WebView per evitare errori 404
               return NavigationDecision.prevent;
             }
             return NavigationDecision.navigate;
@@ -81,31 +86,39 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
     return "$giorno/$mese/$anno";
   }
 
+  // --- FUNZIONE DI PULIZIA ---
   String _pulisciIndirizzoHtml(String? rawHtml) {
     if (rawHtml == null || rawHtml.isEmpty) return "";
 
     try {
+      // 1. Parsing dell'HTML
       var fragment = parser.parseFragment(rawHtml);
 
+      // 2. Rimuoviamo elementi "designazione" (Arbitro)
       fragment.querySelectorAll('.designazione').forEach((e) => e.remove());
 
+      // 3. Rimuoviamo elementi contenenti parole chiave indesiderate
       fragment.querySelectorAll('*').forEach((e) {
-        String testoElem = (e.text ?? "").toLowerCase();
+        String testoElem = e.text.toLowerCase();
         if (testoElem.contains('arbitro') || testoElem.contains('designato')) {
           e.remove();
         }
       });
 
+      // 4. Sostituiamo <br> con un trattino
       fragment.querySelectorAll('br').forEach((br) {
         br.replaceWith(dom.Text(' - '));
       });
 
+      // 5. Estraiamo il testo puro
       String testoPuro = fragment.text ?? "";
 
+      // 6. Pulizia finale stringa
       testoPuro = testoPuro
           .replaceAll("Arbitro designato", "")
           .replaceAll("Arbitro associato", "");
 
+      // 7. Trim
       return testoPuro.replaceAll(RegExp(r'\s+'), ' ').trim();
     } catch (e) {
       return rawHtml ?? "";
@@ -165,29 +178,31 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
               }
 
               if (rawInfo != null && rawInfo.isNotEmpty) {
-                // --- FILTRO POTENZIATO ---
+                // --- FILTRI ---
                 String txtCheck = rawInfo.toLowerCase();
 
+                // Parole che indicano che NON è un indirizzo
                 bool isStatoGara =
                     txtCheck.contains("gara") ||
                     txtCheck.contains("risultato") ||
                     txtCheck.contains("spostata") ||
                     txtCheck.contains("rinviata") ||
-                    txtCheck.contains("disputare") || // <--- AGGIUNTO
-                    txtCheck.contains("sospesa") || // <--- AGGIUNTO
-                    txtCheck.contains("annullata") || // <--- AGGIUNTO
+                    txtCheck.contains("sospesa") ||
+                    txtCheck.contains("annullata") ||
+                    txtCheck.contains("disputare") ||
                     txtCheck.contains("non disputata");
 
                 String infoPulita = _pulisciIndirizzoHtml(rawInfo);
 
                 if (isStatoGara) {
-                  // STATO GARA -> Solo testo semplice
+                  // STATO GARA -> Solo testo semplice (NON CLICCABILE)
                   var labelStato = dom.Element.html(
                     '''<div style="font-size: 10px; color: #666; font-style: italic; white-space: nowrap;">$infoPulita</div>''',
                   );
                   img.replaceWith(labelStato);
                 } else if (infoPulita.length > 5) {
-                  // INDIRIZZO -> Link Mappe
+                  // INDIRIZZO -> Link Mappe (Intercettato da app://)
+                  // Costruiamo il link con lo schema personalizzato
                   String fakeUrl =
                       "app://aprimappe?q=${Uri.encodeComponent(infoPulita)}";
 
@@ -211,7 +226,7 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
                     ''');
                   img.replaceWith(linkMaps);
                 } else {
-                  // Se troppo corto o ignoto, rimuoviamo
+                  // Testo troppo corto o sconosciuto -> Rimuovi
                   img.remove();
                 }
               } else {
@@ -284,6 +299,12 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
             td:contains("CADONEGHE"), td:contains("Cadoneghe") {
               font-weight: bold;
               color: #d32f2f;
+            }
+
+            /* --- NASCONDI COLONNE "GARA" (1) E "G" (2) --- */
+            th:nth-child(1), td:nth-child(1),
+            th:nth-child(2), td:nth-child(2) {
+              display: none;
             }
           </style>
         </head>
