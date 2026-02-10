@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'visualizzatore_risultati.dart';
+import 'visualizzatore_campionato.dart'; // <--- USIAMO QUESTO IMPORT
 import 'visualizzatore_classifica.dart';
 import 'sport_colors.dart';
 
@@ -17,7 +17,7 @@ class SquadrePage extends StatelessWidget {
       ),
       body: Stack(
         children: [
-          // Sfondo Gradiente in alto
+          // Sfondo Gradiente
           Container(
             height: 250,
             decoration: const BoxDecoration(
@@ -123,7 +123,7 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
       ),
       child: Column(
         children: [
-          // INTESTAZIONE CARD
+          // INTESTAZIONE
           InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
             borderRadius: BorderRadius.circular(20),
@@ -161,7 +161,6 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
-                        // Mostriamo il coach anche qui per riferimento rapido
                         Text(
                           "Coach: ${widget.allenatore}",
                           style: const TextStyle(
@@ -186,14 +185,14 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
             ),
           ),
 
-          // CONTENUTO NASCOSTO (DETTAGLI)
+          // DETTAGLI
           if (_expanded)
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. BOTTONI AZIONE
+                  // BOTTONI
                   if (widget.linkRisultati.isNotEmpty ||
                       widget.linkClassifica.isNotEmpty)
                     Row(
@@ -205,13 +204,16 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
                               Icons.emoji_events,
                               SportColors.orangeAction,
                               () {
+                                // --- CORREZIONE: PUNTIAMO A VISUALIZZATORE CAMPIONATO ---
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (c) => VisualizzatoreRisultatiPage(
-                                      titoloPagina: "Risultati",
-                                      urlSito: widget.linkRisultati,
-                                    ),
+                                    builder: (c) =>
+                                        VisualizzatoreCampionatoPage(
+                                          titoloPagina:
+                                              "Risultati & Calendario",
+                                          urlSito: widget.linkRisultati,
+                                        ),
                                   ),
                                 );
                               },
@@ -245,22 +247,17 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
                     ),
 
                   const SizedBox(height: 20),
-
-                  // 2. DETTAGLI STAFF (REINSERITI QUI!)
+                  // INFO
                   _infoRow(Icons.person, "1° Allenatore", widget.allenatore),
-
                   if (widget.dirigente.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     _infoRow(Icons.badge, "Dirigente", widget.dirigente),
                   ],
-
                   if (widget.staff.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     _infoRow(Icons.groups, "Staff Tecnico", widget.staff),
                   ],
-
-                  const Divider(height: 25), // Linea di separazione
-                  // 3. ALLENAMENTI
+                  const Divider(height: 25),
                   if (widget.allenamenti.isNotEmpty) ...[
                     _infoRow(
                       Icons.access_time,
@@ -269,8 +266,6 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
                     ),
                     const SizedBox(height: 15),
                   ],
-
-                  // 4. ROSTER
                   _infoRow(
                     Icons.group,
                     "Atlete",
@@ -327,7 +322,7 @@ class _SchedaSquadraModernState extends State<SchedaSquadraModern> {
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Colors.grey,
-                  fontSize: 13, // Leggermente più piccolo per l'etichetta
+                  fontSize: 13,
                 ),
               ),
               const SizedBox(height: 2),

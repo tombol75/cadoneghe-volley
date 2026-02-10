@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'package:html/parser.dart' as parser;
 
 class VisualizzatoreClassificaPage extends StatefulWidget {
   final String titoloPagina;
   final String urlSito;
-  final String nomeSquadra; // <--- NUOVO PARAMETRO
+  final String nomeSquadra;
 
   const VisualizzatoreClassificaPage({
     super.key,
     required this.titoloPagina,
     required this.urlSito,
-    required this.nomeSquadra, // <--- RICHIESTO
+    required this.nomeSquadra,
   });
 
   @override
@@ -20,151 +22,114 @@ class VisualizzatoreClassificaPage extends StatefulWidget {
 
 class _VisualizzatoreClassificaPageState
     extends State<VisualizzatoreClassificaPage> {
-  WebViewController? _controller;
+  late final WebViewController _controller;
   bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _inizializzaWebView();
-  }
-
-  Future<void> _inizializzaWebView() async {
-    // 1. Pulizia e Reset
-    final cookieManager = WebViewCookieManager();
-    await cookieManager.clearCookies();
-
-    final controller = WebViewController();
-    await controller.clearCache();
-    await controller.clearLocalStorage();
-
-    controller
+    _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.white)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (String url) {
-            if (mounted) setState(() => _isLoading = true);
-          },
-          onPageFinished: (String url) async {
-            // Passiamo il nome della squadra allo script
-            await _applicaFiltroClassifica(controller);
-            if (mounted) setState(() => _isLoading = false);
-          },
-        ),
-      );
+      ..setBackgroundColor(const Color(0xFFFFFFFF));
 
-    await controller.loadRequest(Uri.parse(widget.urlSito));
-
-    if (mounted) {
-      setState(() => _controller = controller);
-    }
+    _caricaClassifica();
   }
 
-  Future<void> _applicaFiltroClassifica(WebViewController ctrl) async {
-    // Puliamo il nome della squadra per la ricerca (togliamo spazi extra)
-    final nomeDaCercare = widget.nomeSquadra.trim();
+  Future<void> _caricaClassifica() async {
+    try {
+      final response = await http.get(Uri.parse(widget.urlSito));
+      if (response.statusCode != 200)
+        throw Exception("Errore HTTP: ${response.statusCode}");
 
-    await ctrl.runJavaScript('''
-      function trovaClassificaPerNome() {
-        // Nome della squadra passato da Flutter (convertito in minuscolo per case-insensitive)
-        var nomeTeam = "$nomeDaCercare".toLowerCase();
-        
-        // Se il nome è composto (es "U16 Bellon"), proviamo a cercare anche solo una parte significativa
-        // per evitare che una piccola differenza blocchi tutto.
-        // Ma per ora usiamo il nome completo per massima precisione.
+      var document = parser.parse(response.body);
+      var tabelle = document.querySelectorAll('table');
+      StringBuffer htmlContenuto = StringBuffer();
+      int tabelleTrovate = 0;
 
-        var tables = document.querySelectorAll('table');
-        var tabellaVincitrice = null;
-        var punteggioMax = -1;
-
-        tables.forEach(function(tbl) {
-           var testo = tbl.innerText.toLowerCase();
-           var nRighe = tbl.rows.length;
-           var punteggio = 0;
-
-           // 1. DEVE ESSERE UNA CLASSIFICA
-           // Deve avere "punti" e NON "squadra casa" (che è risultati)
-           var eClassifica = testo.includes('punti') && !testo.includes('squadra casa');
-
-           if (eClassifica) {
-              // Base: il numero di righe (più è lunga, meglio è)
-              punteggio += nRighe;
-
-              // 2. BONUS ENORME SE CONTIENE IL NOME SQUADRA
-              if (testo.includes(nomeTeam)) {
-                 punteggio += 1000; // Priorità assoluta
-                 console.log("Trovato nome squadra in tabella!");
-              } else {
-                 // Tentativo parziale: se il nome è "U16 BellonMit", cerchiamo anche solo "BellonMit"
-                 // Dividiamo il nome in parole e vediamo se almeno una parola lunga (>3 caratteri) è presente
-                 var parole = nomeTeam.split(' ');
-                 var parolaTrovata = false;
-                 for (var p of parole) {
-                    if (p.length > 3 && testo.includes(p)) {
-                       parolaTrovata = true;
-                       break;
-                    }
-                 }
-                 if (parolaTrovata) punteggio += 500; // Bonus medio
-              }
-
-              // DEBUG
-              console.log("Tabella righe: " + nRighe + " Punteggio: " + punteggio);
-
-              if (punteggio > punteggioMax) {
-                 punteggioMax = punteggio;
-                 tabellaVincitrice = tbl;
-              }
-           }
-        });
-
-        // Fallback Iframe
-        if (!tabellaVincitrice) {
-           var iframe = document.querySelector('iframe');
-           if (iframe) tabellaVincitrice = iframe;
-        }
-
-        if (tabellaVincitrice) {
-          var clone = tabellaVincitrice.cloneNode(true);
-          document.body.innerHTML = '';
-          
-          var container = document.createElement('div');
-          container.style.padding = '10px';
-          container.style.overflowX = 'auto';
-          
-          container.appendChild(clone);
-          document.body.appendChild(container);
-          
-          var style = document.createElement('style');
-          style.innerHTML = `
-            body { background: #fff; font-family: Helvetica, sans-serif; margin: 0; }
-            table { width: 100% !important; border-collapse: collapse; min-width: 400px; }
-            td, th { padding: 10px; border-bottom: 1px solid #ddd; text-align: center; font-size: 14px; }
-            th { background: #0055AA; color: white; }
-            tr:nth-child(even) { background: #f9f9f9; }
-            /* Evidenzia la riga che contiene il nome della squadra */
-            tr:contains('${widget.nomeSquadra}') { background-color: #ffeb3b !important; } 
-          `;
-          document.head.appendChild(style);
-          
-          // Script extra per evidenziare la riga della squadra (JS puro perché CSS :contains non è standard)
-          var rows = document.querySelectorAll('tr');
-          rows.forEach(function(row) {
-             if (row.innerText.toLowerCase().includes(nomeTeam)) {
-                row.style.backgroundColor = "#fff9c4"; // Giallo chiarissimo
-                row.style.fontWeight = "bold";
-                row.style.border = "2px solid #ff9800";
-             }
-          });
-
-        } else {
-           document.body.innerHTML = '<div style="padding:20px; text-align:center;"><h3>Nessuna classifica trovata per: ' + nomeTeam + '</h3></div>';
+      for (var tabella in tabelle) {
+        String testo = tabella.text.toLowerCase();
+        // Cerca tabella con "Punti", "PG" e che non sia "squadra casa" (quella è risultati)
+        if (testo.contains("punti") &&
+            testo.contains("pg") &&
+            !testo.contains("squadra casa")) {
+          tabelleTrovate++;
+          htmlContenuto.write(
+            '<div class="table-wrapper">${tabella.outerHtml}</div>',
+          );
         }
       }
-      
-      setTimeout(trovaClassificaPerNome, 1000);
-    ''');
+
+      if (tabelleTrovate == 0) throw Exception("Classifica non trovata.");
+
+      // Nome squadra per evidenziazione
+      String teamNameJS = widget.nomeSquadra.replaceAll("'", "\\'");
+
+      String htmlFinale =
+          '''
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <style>
+            body { font-family: 'Roboto', sans-serif; margin: 0; padding: 15px; }
+            h3 { color: #0055AA; text-align: center; margin-bottom: 20px; }
+            
+            .table-wrapper {
+              width: 100%; overflow-x: auto;
+              box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+              border-radius: 8px; margin-bottom: 20px; border: 1px solid #eee;
+            }
+            
+            table { width: 100%; border-collapse: collapse; min-width: 400px; font-size: 13px; }
+            
+            th { background-color: #0055AA; color: white; padding: 10px; text-align: center; white-space: nowrap; }
+            td { padding: 8px; border-bottom: 1px solid #eee; color: #333; text-align: center; vertical-align: middle; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            
+            tr.highlight { background-color: #fff9c4 !important; font-weight: bold; border: 2px solid #ffb300; }
+            td:nth-child(2) { font-weight: bold; color: #0055AA; font-size: 14px; }
+            td:nth-child(1) { text-align: left; }
+          </style>
+        </head>
+        <body>
+          <h3>${widget.titoloPagina}</h3>
+          ${htmlContenuto.toString()}
+          <div style="text-align: center; margin-top: 20px; color: #999; font-size: 11px;">Dati Fipav Padova</div>
+
+          <script>
+            var rows = document.querySelectorAll('tr');
+            var search = "$teamNameJS".toLowerCase();
+            var searchParts = search.split(" ");
+            
+            rows.forEach(function(row) {
+              var text = row.innerText.toLowerCase();
+              var found = false;
+              if (text.includes("cadoneghe")) {
+                 for(var part of searchParts) {
+                    if (part.length > 2 && text.includes(part)) { found = true; break; }
+                 }
+                 if (search.length < 4) found = true;
+              }
+              if (found) row.classList.add('highlight');
+            });
+          </script>
+        </body>
+        </html>
+      ''';
+
+      await _controller.loadHtmlString(
+        htmlFinale,
+        baseUrl: "https://www.fipavpd.net/",
+      );
+      if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      if (mounted)
+        setState(() {
+          _errorMessage = e.toString();
+          _isLoading = false;
+        });
+    }
   }
 
   @override
@@ -177,23 +142,19 @@ class _VisualizzatoreClassificaPageState
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () {
-              setState(() {
-                _controller = null;
-                _isLoading = true;
-              });
-              _inizializzaWebView();
-            },
+            onPressed: _caricaClassifica,
           ),
         ],
       ),
       body: Stack(
         children: [
-          if (_controller != null) WebViewWidget(controller: _controller!),
-          if (_isLoading || _controller == null)
+          if (_errorMessage == null) WebViewWidget(controller: _controller),
+          if (_isLoading)
             const Center(
               child: CircularProgressIndicator(color: Color(0xFF0055AA)),
             ),
+          if (_errorMessage != null)
+            Center(child: Text(_errorMessage!, textAlign: TextAlign.center)),
         ],
       ),
     );

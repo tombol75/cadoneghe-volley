@@ -9,7 +9,6 @@ class AdminSquadrePage extends StatefulWidget {
 }
 
 class _AdminSquadrePageState extends State<AdminSquadrePage> {
-  // Variabile locale per mostrare il numero a video
   String _numeroAttuale = "Caricamento...";
 
   @override
@@ -18,7 +17,6 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
     _leggiNumeroDaFirebase();
   }
 
-  // Legge il numero da Firebase all'avvio
   Future<void> _leggiNumeroDaFirebase() async {
     try {
       var doc = await FirebaseFirestore.instance
@@ -42,11 +40,8 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
     }
   }
 
-  // Apre il popup per modificare il numero
   void _apriPopupConfigurazione() {
     final numeroCtrl = TextEditingController();
-
-    // Se c'è già un numero valido, riempiamo il campo
     if (_numeroAttuale.startsWith("+") || _numeroAttuale.startsWith("3")) {
       numeroCtrl.text = _numeroAttuale;
     }
@@ -80,20 +75,14 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
           ElevatedButton(
             onPressed: () async {
               String nuovoNumero = numeroCtrl.text.trim();
-
               if (nuovoNumero.isEmpty) return;
 
-              // Salvataggio su Firebase (crea la collezione se non esiste)
               await FirebaseFirestore.instance
                   .collection('impostazioni')
                   .doc('contatti')
                   .set({'numero': nuovoNumero});
 
-              // Aggiorna la scritta a video
-              setState(() {
-                _numeroAttuale = nuovoNumero;
-              });
-
+              setState(() => _numeroAttuale = nuovoNumero);
               Navigator.pop(ctx);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text("Numero salvato correttamente!")),
@@ -106,7 +95,6 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
     );
   }
 
-  // --- GESTIONE SQUADRE (Codice Standard) ---
   void _eliminaSquadra(String idDoc) {
     showDialog(
       context: context,
@@ -141,12 +129,24 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
     final staffCtrl = TextEditingController(text: dati?['staff']);
     final atleteCtrl = TextEditingController(text: dati?['atlete']);
     final allenamentiCtrl = TextEditingController(text: dati?['allenamenti']);
+
     final linkRisultatiCtrl = TextEditingController(
       text: dati?['link_risultati'],
     );
     final linkClassificaCtrl = TextEditingController(
       text: dati?['link_classifica'],
     );
+
+    final cidCtrl = TextEditingController();
+
+    if (dati?['link_risultati'] != null) {
+      try {
+        Uri uri = Uri.parse(dati!['link_risultati']);
+        if (uri.queryParameters.containsKey('CId')) {
+          cidCtrl.text = uri.queryParameters['CId']!;
+        }
+      } catch (_) {}
+    }
 
     showModalBottomSheet(
       context: context,
@@ -161,6 +161,7 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 idDoc == null ? "Nuova Squadra" : "Modifica Squadra",
@@ -170,31 +171,81 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
                 ),
               ),
               const SizedBox(height: 15),
+
               TextField(
                 controller: nomeCtrl,
                 decoration: const InputDecoration(
-                  labelText: "Nome Squadra",
+                  labelText: "Nome Squadra (es. U16 Rossa)",
                   border: OutlineInputBorder(),
                 ),
               ),
+              const SizedBox(height: 15),
+
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  border: Border.all(color: Colors.blue),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "CONFIGURAZIONE FIPAV",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue,
+                      ),
+                    ),
+                    const Text(
+                      "Inserisci il codice CId per generare i link automaticamente.",
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: cidCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: "Codice Squadra (CId)",
+                        hintText: "Es. 87304",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.numbers),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               const SizedBox(height: 10),
-              TextField(
-                controller: linkRisultatiCtrl,
-                decoration: const InputDecoration(
-                  labelText: "Link Risultati",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.sports_score, color: Colors.orange),
+              ExpansionTile(
+                title: const Text(
+                  "Link Manuali (Avanzato)",
+                  style: TextStyle(fontSize: 14),
                 ),
+                children: [
+                  TextField(
+                    controller: linkRisultatiCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Link Risultati",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.link),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: linkClassificaCtrl,
+                    decoration: const InputDecoration(
+                      labelText: "Link Classifica",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.link),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: linkClassificaCtrl,
-                decoration: const InputDecoration(
-                  labelText: "Link Classifica",
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.leaderboard, color: Colors.blue),
-                ),
-              ),
+
               const SizedBox(height: 10),
               TextField(
                 controller: allenatoreCtrl,
@@ -238,38 +289,63 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
                 ),
               ),
               const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () async {
-                  if (nomeCtrl.text.isEmpty) return;
-                  final dataMap = {
-                    'nome': nomeCtrl.text,
-                    'link_risultati': linkRisultatiCtrl.text,
-                    'link_classifica': linkClassificaCtrl.text,
-                    'allenatore': allenatoreCtrl.text,
-                    'dirigente': dirigenteCtrl.text,
-                    'staff': staffCtrl.text,
-                    'atlete': atleteCtrl.text,
-                    'allenamenti': allenamentiCtrl.text,
-                    'ordine': 99,
-                  };
-                  if (idDoc == null) {
-                    await FirebaseFirestore.instance
-                        .collection('squadre')
-                        .add(dataMap);
-                  } else {
-                    await FirebaseFirestore.instance
-                        .collection('squadre')
-                        .doc(idDoc)
-                        .update(dataMap);
-                  }
-                  Navigator.pop(ctx);
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color.fromARGB(255, 64, 116, 188),
-                ),
-                child: const Text(
-                  "Salva",
-                  style: TextStyle(color: Colors.white),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (nomeCtrl.text.isEmpty) return;
+
+                    String urlRisultati = linkRisultatiCtrl.text;
+                    String urlClassifica = linkClassificaCtrl.text;
+
+                    if (cidCtrl.text.isNotEmpty) {
+                      String cid = cidCtrl.text.trim();
+
+                      // --- URL RISULTATI (SENZA SId=45 per vedere tutto il girone) ---
+                      urlRisultati =
+                          "https://www.fipavpd.net/risultati-classifiche.aspx?"
+                          "ComitatoId=3&StId=2265&DataDa=&StatoGara=&"
+                          "CId=$cid&PId=16651&btFiltro=CERCA"; // Rimosso SId=45
+
+                      // --- URL CLASSIFICA (Manteniamo SId=45 o lo togliamo, è uguale per la classifica) ---
+                      urlClassifica =
+                          "https://www.fipavpd.net/risultati-classifiche.aspx?"
+                          "ComitatoId=3&StId=2265&DataDa=&StatoGara=&"
+                          "CId=$cid&PId=16651&btFiltro=CERCA"; // Rimosso SId=45 per coerenza
+                    }
+
+                    final dataMap = {
+                      'nome': nomeCtrl.text,
+                      'link_risultati': urlRisultati,
+                      'link_classifica': urlClassifica,
+                      'allenatore': allenatoreCtrl.text,
+                      'dirigente': dirigenteCtrl.text,
+                      'staff': staffCtrl.text,
+                      'atlete': atleteCtrl.text,
+                      'allenamenti': allenamentiCtrl.text,
+                      'ordine': 99,
+                    };
+
+                    if (idDoc == null) {
+                      await FirebaseFirestore.instance
+                          .collection('squadre')
+                          .add(dataMap);
+                    } else {
+                      await FirebaseFirestore.instance
+                          .collection('squadre')
+                          .doc(idDoc)
+                          .update(dataMap);
+                    }
+                    Navigator.pop(ctx);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color.fromARGB(255, 64, 116, 188),
+                  ),
+                  child: const Text(
+                    "Salva Squadra",
+                    style: TextStyle(color: Colors.white),
+                  ),
                 ),
               ),
             ],
@@ -287,7 +363,6 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
         backgroundColor: Colors.grey[900],
         foregroundColor: Colors.white,
         actions: [
-          // 1. ICONA IN ALTO A DESTRA
           IconButton(
             icon: const Icon(Icons.settings_phone),
             onPressed: _apriPopupConfigurazione,
@@ -297,12 +372,11 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
       ),
       body: Column(
         children: [
-          // 2. BOX BEN VISIBILE IN CIMA ALLA LISTA
           Container(
             margin: const EdgeInsets.all(16),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.amber.shade100, // Colore Giallo/Ambra per risaltare
+              color: Colors.amber.shade100,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.amber.shade700, width: 2),
             ),
@@ -344,10 +418,7 @@ class _AdminSquadrePageState extends State<AdminSquadrePage> {
               ],
             ),
           ),
-
           const Divider(),
-
-          // 3. LISTA SQUADRE
           Expanded(
             child: StreamBuilder(
               stream: FirebaseFirestore.instance
