@@ -37,15 +37,16 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
         NavigationDelegate(
           onNavigationRequest: (NavigationRequest request) async {
             // --- LOGICA DI INTERCETTAZIONE MAPPE ---
+            // Intercettiamo lo schema personalizzato "app://"
             if (request.url.startsWith("app://aprimappe")) {
               final Uri uri = Uri.parse(request.url);
               final String? queryAddress = uri.queryParameters['q'];
 
               if (queryAddress != null && queryAddress.isNotEmpty) {
                 // 1. COSTRUIAMO IL LINK UFFICIALE DI GOOGLE MAPS
-                // Questo formato funziona sia su Android che su iOS
+                // Questo formato è universale e sicuro
                 final Uri mapsUrl = Uri.parse(
-                  "https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(queryAddress)}",
+                  "https://www.google.com/maps/search/?api=1&query=${Uri.encodeQueryComponent(queryAddress)}",
                 );
 
                 try {
@@ -56,14 +57,14 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
                       mode: LaunchMode.externalApplication,
                     );
                   } else {
-                    // Fallback nel browser se l'app non c'è
+                    // Fallback: apre nel browser se non c'è l'app
                     await launchUrl(mapsUrl);
                   }
                 } catch (e) {
                   debugPrint("Errore apertura mappa: $e");
                 }
               }
-              // Blocchiamo la navigazione dentro la WebView per evitare errori 404
+              // IMPORTANTE: Blocchiamo la navigazione nella WebView per evitare il 404
               return NavigationDecision.prevent;
             }
             return NavigationDecision.navigate;
@@ -71,19 +72,15 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
         ),
       );
 
-    _caricaDatiFipav();
+    _caricaDatiMultiSettimana();
   }
 
-  String _calcolaDataLunediCorrente() {
+  // Calcola il lunedì della settimana (offset: 0=corrente, 1=prossima, etc.)
+  DateTime _getLunediSettimana(int offsetSettimane) {
     DateTime now = DateTime.now();
     int giorniDaSottrarre = now.weekday - 1;
-    DateTime lunedi = now.subtract(Duration(days: giorniDaSottrarre));
-
-    String giorno = lunedi.day.toString().padLeft(2, '0');
-    String mese = lunedi.month.toString().padLeft(2, '0');
-    String anno = lunedi.year.toString();
-
-    return "$giorno/$mese/$anno";
+    DateTime lunediCorrente = now.subtract(Duration(days: giorniDaSottrarre));
+    return lunediCorrente.add(Duration(days: 7 * offsetSettimane));
   }
 
   // --- FUNZIONE DI PULIZIA ---
@@ -91,13 +88,10 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
     if (rawHtml == null || rawHtml.isEmpty) return "";
 
     try {
-      // 1. Parsing dell'HTML
       var fragment = parser.parseFragment(rawHtml);
 
-      // 2. Rimuoviamo elementi "designazione" (Arbitro)
+      // Rimuoviamo elementi inutili
       fragment.querySelectorAll('.designazione').forEach((e) => e.remove());
-
-      // 3. Rimuoviamo elementi contenenti parole chiave indesiderate
       fragment.querySelectorAll('*').forEach((e) {
         String testoElem = e.text.toLowerCase();
         if (testoElem.contains('arbitro') || testoElem.contains('designato')) {
@@ -105,152 +99,146 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
         }
       });
 
-      // 4. Sostituiamo <br> con un trattino
+      // Sostituiamo <br> con trattini
       fragment.querySelectorAll('br').forEach((br) {
         br.replaceWith(dom.Text(' - '));
       });
 
-      // 5. Estraiamo il testo puro
       String testoPuro = fragment.text ?? "";
-
-      // 6. Pulizia finale stringa
       testoPuro = testoPuro
           .replaceAll("Arbitro designato", "")
           .replaceAll("Arbitro associato", "");
 
-      // 7. Trim
       return testoPuro.replaceAll(RegExp(r'\s+'), ' ').trim();
     } catch (e) {
       return rawHtml ?? "";
     }
   }
 
-  Future<void> _caricaDatiFipav() async {
+  // --- CARICAMENTO DATI PER 3 SETTIMANE ---
+  Future<void> _caricaDatiMultiSettimana() async {
     try {
-      String dataLunedi = _calcolaDataLunediCorrente();
-      String dataEncoded = dataLunedi.replaceAll('/', '%2F');
+      StringBuffer htmlAccumulato = StringBuffer();
+      int gareTrovateTotali = 0;
 
-      String urlFipav =
-          "https://www.fipavpd.net/risultati-classifiche.aspx?"
-          "ComitatoId=3&"
-          "StId=2265&"
-          "DataDa=$dataEncoded&"
-          "StatoGara=0&"
-          "CId=&"
-          "SId=45&"
-          "PId=16651&"
-          "btFiltro=CERCA";
+      // Ciclo per le prossime 3 settimane
+      for (int i = 0; i < 3; i++) {
+        DateTime lunedi = _getLunediSettimana(i);
+        String dataUrl =
+            "${lunedi.day.toString().padLeft(2, '0')}%2F${lunedi.month.toString().padLeft(2, '0')}%2F${lunedi.year}";
+        String labelSettimana =
+            "Settimana del ${lunedi.day}/${lunedi.month}/${lunedi.year}";
 
-      final response = await http.get(Uri.parse(urlFipav));
+        // URL FIPAV con StatoGara=0 (Tutte le gare)
+        String urlFipav =
+            "https://www.fipavpd.net/risultati-classifiche.aspx?"
+            "ComitatoId=3&"
+            "StId=2265&"
+            "DataDa=$dataUrl&"
+            "StatoGara=0&" // <--- 0 = Tutte le gare (disputate e non)
+            "CId=&"
+            "SId=45&"
+            "PId=16651&"
+            "btFiltro=CERCA";
 
-      if (response.statusCode != 200) {
-        throw Exception("Errore server FIPAV: ${response.statusCode}");
-      }
+        final response = await http.get(Uri.parse(urlFipav));
 
-      var document = parser.parse(response.body);
-      var tabelle = document.querySelectorAll('table');
+        if (response.statusCode == 200) {
+          var document = parser.parse(response.body);
+          var tabelle = document.querySelectorAll('table');
+          bool trovateInQuestaSettimana = false;
+          StringBuffer htmlSettimana = StringBuffer();
 
-      StringBuffer htmlContenutoGare = StringBuffer();
-      int tabelleTrovate = 0;
+          for (var tabella in tabelle) {
+            if (tabella.innerHtml.contains("Gara") &&
+                tabella.innerHtml.contains("Squadra")) {
+              trovateInQuestaSettimana = true;
+              gareTrovateTotali++;
 
-      for (var tabella in tabelle) {
-        if (tabella.innerHtml.contains("Gara") &&
-            tabella.innerHtml.contains("Squadra")) {
-          tabelleTrovate++;
-
-          String nomeCampionato = "";
-          var caption = tabella.querySelector('caption');
-          if (caption != null) {
-            nomeCampionato = caption.text.trim();
-            caption.remove();
-          } else {
-            nomeCampionato = "Campionato";
-          }
-
-          var righe = tabella.querySelectorAll('tr');
-          for (var riga in righe) {
-            var immagini = riga.querySelectorAll('img');
-
-            for (var img in immagini) {
-              String? rawInfo = img.attributes['title'];
-              if (rawInfo == null || rawInfo.isEmpty) {
-                rawInfo = img.attributes['alt'];
-              }
-
-              if (rawInfo != null && rawInfo.isNotEmpty) {
-                // --- FILTRI ---
-                String txtCheck = rawInfo.toLowerCase();
-
-                // Parole che indicano che NON è un indirizzo
-                bool isStatoGara =
-                    txtCheck.contains("gara") ||
-                    txtCheck.contains("risultato") ||
-                    txtCheck.contains("spostata") ||
-                    txtCheck.contains("rinviata") ||
-                    txtCheck.contains("sospesa") ||
-                    txtCheck.contains("annullata") ||
-                    txtCheck.contains("disputare") ||
-                    txtCheck.contains("non disputata");
-
-                String infoPulita = _pulisciIndirizzoHtml(rawInfo);
-
-                if (isStatoGara) {
-                  // STATO GARA -> Solo testo semplice (NON CLICCABILE)
-                  var labelStato = dom.Element.html(
-                    '''<div style="font-size: 10px; color: #666; font-style: italic; white-space: nowrap;">$infoPulita</div>''',
-                  );
-                  img.replaceWith(labelStato);
-                } else if (infoPulita.length > 5) {
-                  // INDIRIZZO -> Link Mappe (Intercettato da app://)
-                  // Costruiamo il link con lo schema personalizzato
-                  String fakeUrl =
-                      "app://aprimappe?q=${Uri.encodeComponent(infoPulita)}";
-
-                  var linkMaps = dom.Element.html('''
-                    <a href="$fakeUrl" style="text-decoration: none; display: block; margin-top: 4px;">
-                      <div style="
-                        background-color: #e3f2fd; 
-                        color: #0055AA; 
-                        border: 1px solid #0055AA;
-                        border-radius: 6px; 
-                        padding: 6px; 
-                        font-size: 11px; 
-                        font-weight: bold;
-                        text-align: center;
-                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                      ">
-                        📍 NAVIGA
-                        <div style="font-weight: normal; font-size: 10px; margin-top: 2px; color: #333;">$infoPulita</div>
-                      </div>
-                    </a>
-                    ''');
-                  img.replaceWith(linkMaps);
-                } else {
-                  // Testo troppo corto o sconosciuto -> Rimuovi
-                  img.remove();
-                }
+              // Estrai Titolo Campionato
+              String nomeCampionato = "";
+              var caption = tabella.querySelector('caption');
+              if (caption != null) {
+                nomeCampionato = caption.text.trim();
+                caption.remove();
               } else {
-                img.remove();
+                nomeCampionato = "Campionato";
               }
+
+              // Processa Righe (Mappe e Pulizia)
+              var righe = tabella.querySelectorAll('tr');
+              for (var riga in righe) {
+                var immagini = riga.querySelectorAll('img');
+                for (var img in immagini) {
+                  String? rawInfo =
+                      img.attributes['title'] ?? img.attributes['alt'];
+                  if (rawInfo != null && rawInfo.isNotEmpty) {
+                    String txtCheck = rawInfo.toLowerCase();
+                    bool isStatoGara =
+                        txtCheck.contains("gara") ||
+                        txtCheck.contains("risultato") ||
+                        txtCheck.contains("spostata") ||
+                        txtCheck.contains("rinviata") ||
+                        txtCheck.contains("sospesa") ||
+                        txtCheck.contains("annullata") ||
+                        txtCheck.contains("disputare") ||
+                        txtCheck.contains("non disputata");
+
+                    String infoPulita = _pulisciIndirizzoHtml(rawInfo);
+
+                    if (isStatoGara) {
+                      // Solo testo per lo stato (Gara da disputare, etc.)
+                      var label = dom.Element.html(
+                        '<div style="font-size:10px;color:#666;font-style:italic;">$infoPulita</div>',
+                      );
+                      img.replaceWith(label);
+                    } else if (infoPulita.length > 5) {
+                      // LINK MAPPE (Usa lo schema app:// per essere intercettato)
+                      String fakeUrl =
+                          "app://aprimappe?q=${Uri.encodeComponent(infoPulita)}";
+
+                      var btnMap = dom.Element.html('''
+                        <a href="$fakeUrl" style="text-decoration:none;display:block;margin-top:4px;">
+                          <div style="background-color:#e3f2fd;color:#0055AA;border:1px solid #0055AA;border-radius:6px;padding:5px;font-size:11px;font-weight:bold;text-align:center;">
+                            📍 NAVIGA<br><span style="font-weight:normal;font-size:10px;color:#333;">$infoPulita</span>
+                          </div>
+                        </a>''');
+                      img.replaceWith(btnMap);
+                    } else {
+                      img.remove();
+                    }
+                  } else {
+                    img.remove();
+                  }
+                }
+              }
+
+              // Aggiungi Titolo e Tabella
+              htmlSettimana.write(
+                '<h5 style="color:#d32f2f;margin:15px 0 5px 0;text-transform:uppercase;">$nomeCampionato</h5>',
+              );
+              htmlSettimana.write(
+                '<div class="table-wrapper">${tabella.outerHtml}</div>',
+              );
             }
           }
 
-          if (nomeCampionato.isNotEmpty) {
-            htmlContenutoGare.write(
-              '<h4 style="color: #d32f2f; margin-top: 30px; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px;">$nomeCampionato</h4>',
-            );
+          if (trovateInQuestaSettimana) {
+            htmlAccumulato.write('''
+              <div class="settimana-block">
+                <div class="settimana-header">$labelSettimana</div>
+                ${htmlSettimana.toString()}
+              </div>
+            ''');
           }
-
-          htmlContenutoGare.write('<div class="table-wrapper">');
-          htmlContenutoGare.write(tabella.outerHtml);
-          htmlContenutoGare.write('</div>');
         }
       }
 
-      if (tabelleTrovate == 0) {
-        throw Exception("Nessuna gara trovata per questa settimana.");
+      if (gareTrovateTotali == 0) {
+        throw Exception("Nessuna gara trovata nelle prossime 3 settimane.");
       }
 
+      // Costruzione HTML Finale
       String htmlFinale =
           '''
         <!DOCTYPE html>
@@ -258,61 +246,49 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
         <head>
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <style>
-            body { 
-              font-family: 'Roboto', sans-serif; 
-              background-color: #FFFFFF; 
-              margin: 0; 
-              padding: 15px; 
-              padding-bottom: 50px;
-            }
-            h3.main-title { color: #0055AA; text-align: center; margin-bottom: 10px; }
-            h4 { font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
-            .table-wrapper {
-              width: 100%;
-              overflow-x: auto;
-              box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-              border-radius: 8px;
-              margin-bottom: 20px;
-              border: 1px solid #eee;
-            }
-            table { 
-              width: 100%; 
-              border-collapse: collapse; 
-              min-width: 600px; 
-              font-size: 13px;
-            }
-            th {
-              background-color: #0055AA;
-              color: white;
-              padding: 10px;
-              text-align: left;
-              white-space: nowrap;
-              font-size: 12px;
-            }
-            td { 
-              padding: 10px; 
-              border-bottom: 1px solid #eee;
-              color: #333;
-              vertical-align: middle;
-            }
-            tr:nth-child(even) { background-color: #f9f9f9; }
-            td:contains("CADONEGHE"), td:contains("Cadoneghe") {
-              font-weight: bold;
-              color: #d32f2f;
+            body { font-family: 'Roboto', sans-serif; background-color: #FFFFFF; margin: 0; padding: 10px; padding-bottom: 50px; }
+            
+            h3.main-title { color: #0055AA; text-align: center; margin-bottom: 20px; }
+            
+            .settimana-block { margin-bottom: 30px; border-bottom: 4px solid #eee; padding-bottom: 20px; }
+            
+            .settimana-header { 
+              background-color: #0055AA; 
+              color: white; 
+              padding: 8px 15px; 
+              font-size: 14px; 
+              font-weight: bold; 
+              border-radius: 20px; 
+              display: inline-block;
+              margin-bottom: 10px;
             }
 
-            /* --- NASCONDI COLONNE "GARA" (1) E "G" (2) --- */
+            h5 { font-size: 14px; letter-spacing: 0.5px; border-left: 4px solid #d32f2f; padding-left: 8px; }
+
+            .table-wrapper { width: 100%; overflow-x: auto; margin-bottom: 10px; }
+            
+            table { width: 100%; border-collapse: collapse; min-width: 600px; font-size: 13px; }
+            
+            th { background-color: #f1f1f1; color: #333; padding: 8px; text-align: left; font-size: 11px; white-space: nowrap; }
+            
+            td { padding: 8px; border-bottom: 1px solid #eee; color: #333; vertical-align: middle; }
+            
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            
+            td:contains("CADONEGHE"), td:contains("Cadoneghe") { font-weight: bold; color: #d32f2f; }
+
+            /* NASCONDI COLONNE "Gara" e "G" (di solito le prime due) */
             th:nth-child(1), td:nth-child(1),
-            th:nth-child(2), td:nth-child(2) {
-              display: none;
-            }
+            th:nth-child(2), td:nth-child(2) { display: none; }
           </style>
         </head>
         <body>
           <h3 class="main-title">${widget.titoloPagina}</h3>
-          ${htmlContenutoGare.toString()}
+          
+          ${htmlAccumulato.toString()}
+
           <div style="text-align: center; margin-top: 30px; color: #999; font-size: 11px;">
-            Fonte: Fipav Padova (Settimana del $dataLunedi)<br>
+            Fonte: Fipav Padova - Prossime 3 Settimane<br>
             Codice Società: 45
           </div>
         </body>
@@ -352,7 +328,7 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
                 _isLoading = true;
                 _errorMessage = null;
               });
-              _caricaDatiFipav();
+              _caricaDatiMultiSettimana();
             },
           ),
         ],
@@ -373,7 +349,7 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
                     ),
                     const SizedBox(height: 10),
                     const Text(
-                      "Nessuna gara in programma",
+                      "Nessuna gara trovata",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
@@ -381,7 +357,7 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
                     ),
                     const SizedBox(height: 5),
                     const Text(
-                      "Non ci sono partite previste per questa settimana\no impossibile recuperare i dati.",
+                      "Non ci sono partite in programma nelle prossime 3 settimane.",
                       textAlign: TextAlign.center,
                       style: TextStyle(color: Colors.grey),
                     ),
@@ -392,7 +368,7 @@ class _VisualizzatoreGarePageState extends State<VisualizzatoreGarePage> {
                           _isLoading = true;
                           _errorMessage = null;
                         });
-                        _caricaDatiFipav();
+                        _caricaDatiMultiSettimana();
                       },
                       child: const Text("Aggiorna"),
                     ),

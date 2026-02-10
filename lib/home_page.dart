@@ -15,6 +15,7 @@ import 'documenti_page.dart';
 import 'sponsor_page.dart';
 import 'tabellone_page.dart';
 import 'visualizzatore_gare.dart';
+import 'visualizzatore_risultati.dart'; // <--- AGGIUNTO QUESTO IMPORT
 import 'contatti_page.dart';
 import 'sport_colors.dart';
 
@@ -335,6 +336,8 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
+
+                      // --- PROSSIME GARE (Usa VisualizzatoreGarePage) ---
                       _buildActionCard(
                         context,
                         title: "Prossime Gare",
@@ -351,6 +354,8 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
+
+                      // --- CORREZIONE: ULTIMI RISULTATI (Ora usa VisualizzatoreRisultatiPage) ---
                       _buildActionCard(
                         context,
                         title: "Ultimi Risultati",
@@ -359,14 +364,16 @@ class _HomePageState extends State<HomePage> {
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => const VisualizzatoreGarePage(
-                              titoloPagina: "Ultimi Risultati",
-                              urlSito: "http://www.pallavolocadoneghe.it/",
-                              selettoreCss: ".wp_ultimirisultati",
-                            ),
+                            builder: (context) =>
+                                const VisualizzatoreRisultatiPage(
+                                  titoloPagina: "Ultimi Risultati",
+                                  urlSito: "http://www.pallavolocadoneghe.it/",
+                                ),
                           ),
                         ),
                       ),
+
+                      // -------------------------------------------------------------------------
                       _buildActionCard(
                         context,
                         title: "Segnapunti",
