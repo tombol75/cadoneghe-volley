@@ -1,11 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'direttivo_page.dart';
-import 'squadre_page.dart'; // Importiamo la pagina delle squadre
+import 'squadre_page.dart';
 import 'admin_direttivo_page.dart';
 import 'admin_squadre_page.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Serve per cercare i compleanni
-import 'admin_compleanni_page.dart'; // La pagina appena creata
-import 'sito_risultati_last_gare.dart';
+import 'admin_compleanni_page.dart';
+import 'admin_comunicazioni_page.dart';
+import 'admin_documenti_page.dart';
+import 'admin_sponsor_page.dart';
+import 'comunicazioni_page.dart';
+import 'documenti_page.dart';
+import 'sponsor_page.dart';
+import 'tabellone_page.dart';
+import 'visualizzatore_gare.dart';
+import 'visualizzatore_risultati.dart'; // <--- AGGIUNTO QUESTO IMPORT
+import 'contatti_page.dart';
+import 'sport_colors.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,234 +30,589 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    // Appena l'app parte, controlliamo i compleanni
-    // Usiamo un piccolo ritardo per aspettare che la grafica sia pronta
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkCompleanniOggi();
+      _checkComunicazioniUrgenti();
     });
   }
 
-  Future<void> _checkCompleanniOggi() async {
-    final today = DateTime.now();
+  // --- 1. CONTROLLO NEWS URGENTI ---
+  Future<void> _checkComunicazioniUrgenti() async {
+    try {
+      var query = await FirebaseFirestore.instance
+          .collection('comunicazioni')
+          .where('priorita', isEqualTo: 1)
+          .orderBy('data', descending: true)
+          .limit(1)
+          .get();
 
-    final snapshot = await FirebaseFirestore.instance
-        .collection('compleanni')
-        .get();
+      if (query.docs.isNotEmpty) {
+        var doc = query.docs.first;
+        String idNews = doc.id;
+        String titolo = doc['titolo'];
+        String testo = doc['testo'];
 
-    List<String> festeggiati = [];
+        final prefs = await SharedPreferences.getInstance();
+        String? idUltimaLetta = prefs.getString('ultima_news_urgente_letta');
 
-    for (var doc in snapshot.docs) {
-      final data = doc.data();
-
-      // --- CORREZIONE DI SICUREZZA ---
-      // Se il campo 'data_nascita' non esiste o è nullo, saltiamo questo giro.
-      if (data['data_nascita'] == null) {
-        continue; // Passa al prossimo documento senza crashare
-      }
-      // -------------------------------
-
-      final dataNascita = (data['data_nascita'] as Timestamp).toDate();
-
-      if (dataNascita.day == today.day && dataNascita.month == today.month) {
-        festeggiati.add("${data['nome']} (${data['squadra']})");
-      }
-    }
-
-    if (festeggiati.isNotEmpty && mounted) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          backgroundColor: Colors.pink.shade50,
-          title: const Row(
-            children: [
-              Icon(Icons.cake, color: Colors.pink, size: 30),
-              SizedBox(width: 10),
-              Text("Buon Compleanno!"),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                "Oggi facciamo gli auguri a:",
-                style: TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 15),
-              ...festeggiati.map(
-                (nome) => Text(
-                  nome,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.pink,
-                  ),
+        if (idUltimaLetta != idNews) {
+          if (mounted) {
+            await showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => AlertDialog(
+                backgroundColor: Colors.red.shade50,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
                 ),
+                title: Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red,
+                      size: 30,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        titolo,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                content: Text(testo, style: const TextStyle(fontSize: 16)),
+                actions: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                    ),
+                    onPressed: () async {
+                      await prefs.setString(
+                        'ultima_news_urgente_letta',
+                        idNews,
+                      );
+                      if (mounted) Navigator.pop(ctx);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (c) => const ComunicazioniPage(),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      "HO LETTO",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.pink),
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                "Auguri! 🎉",
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      );
+            );
+          }
+        }
+      }
+
+      // --- 2. DOPO LE NEWS, CONTROLLIAMO I COMPLEANNI ---
+      if (mounted) {
+        _checkCompleanniOggi();
+      }
+    } catch (e) {
+      debugPrint("Errore check news: $e");
+      // Se fallisce le news, proviamo comunque i compleanni
+      if (mounted) _checkCompleanniOggi();
     }
   }
 
-  // ... qui sotto c'è il metodo build ...
+  // --- 3. LOGICA COMPLEANNI ---
+  Future<void> _checkCompleanniOggi() async {
+    final now = DateTime.now();
+    final todayDay = now.day;
+    final todayMonth = now.month;
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('compleanni')
+          .get();
+      List<String> festeggiati = [];
+
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        if (data['data_nascita'] != null) {
+          DateTime dataNascita = (data['data_nascita'] as Timestamp).toDate();
+          if (dataNascita.day == todayDay && dataNascita.month == todayMonth) {
+            festeggiati.add("${data['nome']} (${data['squadra']})");
+          }
+        }
+      }
+
+      if (festeggiati.isNotEmpty) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: Colors.pink.shade50,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.cake, color: Colors.pink, size: 30),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    "Buon Compleanno!",
+                    style: TextStyle(
+                      color: Colors.pink,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Tanti auguri a:", style: TextStyle(fontSize: 16)),
+                const SizedBox(height: 10),
+                ...festeggiati.map(
+                  (f) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 2),
+                    child: Text(
+                      "• $f",
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.pink),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text(
+                  "Auguri!",
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("Errore compleanni: $e");
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('APP Cadoneghe Volley'),
-        backgroundColor: Colors.blue,
-        actions: [
-          IconButton(
-            icon: const Icon(
-              Icons.admin_panel_settings,
-            ), // Icona Lucchetto/Admin
-            onPressed: () {
-              _mostraLogin(context); // Chiama la funzione password
-            },
+      body: CustomScrollView(
+        slivers: [
+          // HEADER
+          SliverAppBar(
+            expandedHeight: 260.0,
+            floating: false,
+            pinned: true,
+            stretch: true,
+            backgroundColor: SportColors.blueDeep,
+            flexibleSpace: FlexibleSpaceBar(
+              centerTitle: true,
+              title: const Text(
+                "CADONEGHE VOLLEY",
+                style: TextStyle(
+                  shadows: [Shadow(blurRadius: 10, color: Colors.black45)],
+                ),
+              ),
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [SportColors.blueLight, SportColors.blueDeep],
+                  ),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(40),
+                    bottomRight: Radius.circular(40),
+                  ),
+                ),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 50.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 120,
+                          height: 120,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black26,
+                                blurRadius: 20,
+                                offset: Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: ClipOval(
+                            child: Image.asset(
+                              'assets/images/logo_round.png',
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(
+                                  Icons.sports_volleyball,
+                                  size: 60,
+                                  color: SportColors.blueDeep,
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(
+                  Icons.admin_panel_settings,
+                  color: Colors.white,
+                ),
+                onPressed: () => _mostraLogin(context),
+              ),
+            ],
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(40),
+                bottomRight: Radius.circular(40),
+              ),
+            ),
+          ),
+
+          // CORPO
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 10),
+                  Text(
+                    "Match Center",
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // GRIGLIA PULSANTI
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisSpacing: 15,
+                    mainAxisSpacing: 15,
+                    childAspectRatio: 1.1,
+                    children: [
+                      _buildActionCard(
+                        context,
+                        title: "Avvisi & News",
+                        icon: Icons.campaign_rounded,
+                        color: Colors.purple,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ComunicazioniPage(),
+                          ),
+                        ),
+                      ),
+
+                      // --- PROSSIME GARE (Usa VisualizzatoreGarePage) ---
+                      _buildActionCard(
+                        context,
+                        title: "Prossime Gare",
+                        icon: Icons.calendar_today_rounded,
+                        color: SportColors.blueDeep,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const VisualizzatoreGarePage(
+                              titoloPagina: "Prossime Gare",
+                              urlSito: "http://www.pallavolocadoneghe.it/",
+                              selettoreCss: ".wp_prossimepartite",
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // --- CORREZIONE: ULTIMI RISULTATI (Ora usa VisualizzatoreRisultatiPage) ---
+                      _buildActionCard(
+                        context,
+                        title: "Ultimi Risultati",
+                        icon: Icons.emoji_events_rounded,
+                        color: SportColors.orangeAction,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                const VisualizzatoreRisultatiPage(
+                                  titoloPagina: "Ultimi Risultati",
+                                  urlSito: "http://www.pallavolocadoneghe.it/",
+                                ),
+                          ),
+                        ),
+                      ),
+
+                      // -------------------------------------------------------------------------
+                      _buildActionCard(
+                        context,
+                        title: "Segnapunti",
+                        icon: Icons.scoreboard_rounded,
+                        color: Colors.redAccent,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const TabellonePage(),
+                          ),
+                        ),
+                      ),
+                      _buildActionCard(
+                        context,
+                        title: "Area Download",
+                        icon: Icons.cloud_download_rounded,
+                        color: Colors.teal,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const DocumentiPage(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 30),
+                  Text(
+                    "Esplora il Club",
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 20),
+
+                  _buildBigBannerBtn(
+                    context,
+                    title: "LE NOSTRE SQUADRE",
+                    subtitle: "Roster, classifiche e orari",
+                    icon: Icons.groups_rounded,
+                    gradientColors: [
+                      SportColors.orangeAction,
+                      Colors.deepOrange,
+                    ],
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SquadrePage(),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  _buildBigBannerBtn(
+                    context,
+                    title: "STAFF",
+                    subtitle: "Chi siamo e organizzazione",
+                    icon: Icons.account_balance_rounded,
+                    gradientColors: [
+                      SportColors.blueDeep,
+                      SportColors.blueLight,
+                    ],
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const DirettivoPage(),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  _buildBigBannerBtn(
+                    context,
+                    title: "I NOSTRI PARTNER",
+                    subtitle: "Sponsor e collaborazioni",
+                    icon: Icons.handshake,
+                    gradientColors: [Colors.indigo, Colors.blueAccent],
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const SponsorPage(),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  _buildBigBannerBtn(
+                    context,
+                    title: "CONTATTACI",
+                    subtitle: "Invia SMS e Segnalazioni",
+                    icon: Icons.sms,
+                    gradientColors: [Colors.green, Colors.teal],
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ContattiPage(),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
           ),
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // LOGO
-            Image.asset('assets/images/logo.png', height: 150),
+    );
+  }
 
-            const SizedBox(height: 20),
-
-            const Text(
-              'Cadoneghe Volley',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-            ),
-
-            // ... logo e titolo sopra ...
-            const SizedBox(height: 40),
-
-            // BOTTONE 1: DIRETTIVO (Nuovo)
-            SizedBox(
-              // Uso SizedBox per dare una larghezza fissa ai bottoni
-              width: 250,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const DirettivoPage(),
-                    ),
-                  );
-                },
-                child: const Text('Il Direttivo'),
-              ),
-            ),
-
-            const SizedBox(height: 15),
-
-            // BOTTONE 2: SQUADRE
-            SizedBox(
-              width: 250,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SquadrePage(),
-                    ),
-                  );
-                },
-                child: const Text('Le Nostre Squadre'),
-              ),
-            ),
-            const SizedBox(height: 15),
-
-            // BOTTONE 3: SITO WEB
-            SizedBox(
-              width: 250,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color.fromARGB(
-                    255,
-                    240,
-                    240,
-                    240,
-                  ), // Colore leggermente diverso
-                  foregroundColor: Colors.black,
+  Widget _buildActionCard(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.white,
+      elevation: 6,
+      shadowColor: color.withOpacity(0.2),
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.all(15.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  shape: BoxShape.circle,
                 ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SitoWebPage(),
-                    ),
-                  );
-                },
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.public, size: 20), // Icona Mondo
-                    SizedBox(width: 10),
-                    Text('Prossime Gare'),
-                  ],
+                child: Icon(icon, size: 30, color: color),
+              ),
+              const Spacer(),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
               ),
-            ),
-            const SizedBox(height: 15),
-
-            // BOTTONE 3: Risultati Ultime Gare
-            SizedBox(
-              width: 250,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color.fromARGB(
-                    255,
-                    240,
-                    240,
-                    240,
-                  ), // Colore leggermente diverso
-                  foregroundColor: Colors.black,
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SitoWebPage(),
-                    ),
-                  );
-                },
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.public, size: 20), // Icona Mondo
-                    SizedBox(width: 10),
-                    Text('Risultati Ultime Gare'),
-                  ],
-                ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // --- FUNZIONE PER LA PASSWORD (CORRETTA) ---
+  Widget _buildBigBannerBtn(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required List<Color> gradientColors,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      height: 110,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: gradientColors[0].withOpacity(0.4),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(24),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            child: Row(
+              children: [
+                Icon(icon, size: 45, color: Colors.white.withOpacity(0.9)),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: Colors.white.withOpacity(0.7),
+                  size: 20,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _mostraLogin(BuildContext context) {
     TextEditingController passwordController = TextEditingController();
 
     showDialog(
-      context: context, // Usa il context della Home Page (VIVO)
-      // QUI C'ERA L'ERRORE: Invece di (context), lo chiamiamo (dialogContext)
-      // così non si confonde con quello sopra!
+      context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Area Riservata'),
@@ -256,24 +623,16 @@ class _HomePageState extends State<HomePage> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(
-                dialogContext,
-              ), // Chiudiamo usando il dialogContext
+              onPressed: () => Navigator.pop(dialogContext),
               child: const Text('Annulla'),
             ),
             ElevatedButton(
               onPressed: () {
                 if (passwordController.text == "volley2024") {
-                  // 1. Chiudiamo il popup della password
                   Navigator.pop(dialogContext);
-
-                  // 2. APRIAMO IL MENU
-                  // IMPORTANTE: Qui usiamo 'context' (quello della Home Page, che è ancora vivo),
-                  // non 'dialogContext' (che è appena stato chiuso/distrutto).
                   showModalBottomSheet(
                     context: context,
                     builder: (sheetContext) {
-                      // Anche qui diamo un nome diverso per sicurezza
                       return Container(
                         padding: const EdgeInsets.all(20),
                         width: double.infinity,
@@ -288,8 +647,55 @@ class _HomePageState extends State<HomePage> {
                               ),
                             ),
                             const SizedBox(height: 20),
-
-                            // GESTISCI DIRETTIVO
+                            ListTile(
+                              leading: const Icon(
+                                Icons.campaign,
+                                color: Colors.purple,
+                              ),
+                              title: const Text("Gestisci Comunicazioni"),
+                              onTap: () {
+                                Navigator.pop(sheetContext);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) =>
+                                        const AdminComunicazioniPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(
+                                Icons.description,
+                                color: Colors.teal,
+                              ),
+                              title: const Text("Gestisci Documenti"),
+                              onTap: () {
+                                Navigator.pop(sheetContext);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) => const AdminDocumentiPage(),
+                                  ),
+                                );
+                              },
+                            ),
+                            ListTile(
+                              leading: const Icon(
+                                Icons.handshake,
+                                color: Colors.indigo,
+                              ),
+                              title: const Text("Gestisci Sponsor"),
+                              onTap: () {
+                                Navigator.pop(sheetContext);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (c) => const AdminSponsorPage(),
+                                  ),
+                                );
+                              },
+                            ),
                             ListTile(
                               leading: const Icon(
                                 Icons.people,
@@ -297,8 +703,7 @@ class _HomePageState extends State<HomePage> {
                               ),
                               title: const Text("Gestisci Direttivo"),
                               onTap: () {
-                                Navigator.pop(sheetContext); // Chiude il menu
-                                // Usa 'context' della Home per navigare
+                                Navigator.pop(sheetContext);
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -307,8 +712,6 @@ class _HomePageState extends State<HomePage> {
                                 );
                               },
                             ),
-
-                            // GESTISCI SQUADRE
                             ListTile(
                               leading: const Icon(
                                 Icons.sports_volleyball,
@@ -316,8 +719,7 @@ class _HomePageState extends State<HomePage> {
                               ),
                               title: const Text("Gestisci Squadre"),
                               onTap: () {
-                                Navigator.pop(sheetContext); // Chiude il menu
-                                // Usa 'context' della Home per navigare
+                                Navigator.pop(sheetContext);
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
@@ -326,7 +728,6 @@ class _HomePageState extends State<HomePage> {
                                 );
                               },
                             ),
-                            // GESTISCI COMPLEANNI (NUOVO)
                             ListTile(
                               leading: const Icon(
                                 Icons.cake,
@@ -343,7 +744,6 @@ class _HomePageState extends State<HomePage> {
                                 );
                               },
                             ),
-
                             const SizedBox(height: 20),
                           ],
                         ),
