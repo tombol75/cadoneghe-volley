@@ -63,7 +63,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '513634319009',
     projectId: 'cadoneghe-volley-app',
     storageBucket: 'cadoneghe-volley-app.firebasestorage.app',
-    iosBundleId: 'com.example.primaApp',
+    iosBundleId: 'it.tom.cadoneghevolley',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -72,7 +72,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '513634319009',
     projectId: 'cadoneghe-volley-app',
     storageBucket: 'cadoneghe-volley-app.firebasestorage.app',
-    iosBundleId: 'com.example.primaApp',
+    iosBundleId: 'it.tom.cadoneghevolley',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

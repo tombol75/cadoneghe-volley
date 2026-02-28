@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.example.primaApp</string>
+	<string>it.tom.cadoneghevolley</string>
 	<key>PROJECT_ID</key>
 	<string>cadoneghe-volley-app</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:513634319009:ios:20b80894f50dbe5f810ee0</string>
+	<string>1:513634319009:ios:98c9fbaa472ffd38810ee0</string>
 </dict>
 </plist>
