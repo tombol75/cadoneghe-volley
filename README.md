@@ -1,6 +1,5 @@
-# prima_app
+# Cadoneghe Volley APP
 
-A new Flutter project.
 
 ## Getting Started
 
