@@ -1,0 +1,12 @@
+BUILD IOS:
+flutter clean (opzionale, per pulire vecchi residui).
+flutter pub get.
+cd ios && pod install && cd ...
+flutter build ios --release.
+Xcode -> Archive -> Distribute.
+
+
+BUILD ANDROID:
+flutter clean                                                  
+flutter pub get     
+flutter build appbundle
