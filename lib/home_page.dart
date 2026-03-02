@@ -367,7 +367,7 @@ class _HomePageState extends State<HomePage> {
                   _buildBigBannerBtn(
                     context,
                     title: "CONTATTACI",
-                    subtitle: "Invia SMS e Segnalazioni",
+                    subtitle: "Info per contattarci",
                     icon: Icons.sms,
                     gradientColors: [Colors.green, Colors.teal],
                     onTap: () => Navigator.push(
