@@ -53,6 +53,9 @@ class _VisualizzatoreClassificaPageState
         if (testo.contains("punti") &&
             testo.contains("pg") &&
             !testo.contains("squadra casa")) {
+          for (final logo in tabella.querySelectorAll('img')) {
+            logo.remove();
+          }
           tabelleTrovate++;
           htmlContenuto.write(
             '<div class="table-wrapper">${tabella.outerHtml}</div>',
@@ -85,6 +88,7 @@ class _VisualizzatoreClassificaPageState
             
             th { background-color: #0055AA; color: white; padding: 10px; text-align: center; white-space: nowrap; }
             td { padding: 8px; border-bottom: 1px solid #eee; color: #333; text-align: center; vertical-align: middle; }
+            td img { display: none !important; }
             tr:nth-child(even) { background-color: #f9f9f9; }
             
             tr.highlight { background-color: #fff9c4 !important; font-weight: bold; border: 2px solid #ffb300; }

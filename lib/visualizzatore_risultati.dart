@@ -135,6 +135,10 @@ class _VisualizzatoreRisultatiPageState
               tabella.innerHtml.contains("Set"))) {
         tabelleValide++;
 
+        for (final logo in tabella.querySelectorAll('img')) {
+          logo.remove();
+        }
+
         String titoloCampionato = "Campionato";
         var caption = tabella.querySelector('caption');
         if (caption != null) {
@@ -173,6 +177,7 @@ class _VisualizzatoreRisultatiPageState
             }
             
             table { width: 100%; border-collapse: collapse; min-width: 550px; font-size: 13px; }
+            td img { display: none !important; }
             
             th { background-color: #e65100; color: white; padding: 10px; text-align: center; font-size: 12px; white-space: nowrap; }
             

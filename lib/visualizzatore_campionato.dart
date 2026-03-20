@@ -76,6 +76,9 @@ class _VisualizzatoreCampionatoPageState
         String testo = tabella.text.toLowerCase();
         if (testo.contains("squadra") &&
             (testo.contains("ris") || testo.contains("set"))) {
+          for (final logo in tabella.querySelectorAll('img')) {
+            logo.remove();
+          }
           tabelleTrovate++;
           htmlContenuto.write(
             '<div class="table-wrapper">${tabella.outerHtml}</div>',
@@ -102,6 +105,7 @@ class _VisualizzatoreCampionatoPageState
             table { width: 100%; border-collapse: collapse; min-width: 550px; font-size: 13px; }
             th { background-color: #e65100; color: white; padding: 12px 8px; text-align: center; white-space: nowrap; }
             td { padding: 10px 6px; border-bottom: 1px solid #eee; color: #333; text-align: center; vertical-align: middle; }
+            td img { display: none !important; }
             tr:nth-child(even) { background-color: #fffaf0; }
             td:contains("CADONEGHE"), td:contains("Cadoneghe") { font-weight: bold; color: #d32f2f; }
             th:nth-child(1), td:nth-child(1), th:nth-child(2), td:nth-child(2) { display: none; }
