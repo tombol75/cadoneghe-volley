@@ -1,8 +1,8 @@
 BUILD IOS:
-flutter clean (opzionale, per pulire vecchi residui).
-flutter pub get.
-cd ios && pod install && cd ...
-flutter build ios --release.
+flutter clean
+flutter pub get
+cd ios && pod install && cd ..
+flutter build ios --release
 Xcode -> Archive -> Distribute.
 
 
